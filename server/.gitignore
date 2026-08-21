@@ -1,7 +1,3 @@
 /target
-# ローカルの SQLite 実体と WAL
-*.db
-*.db-shm
-*.db-wal
-# 環境変数の実ファイル（サンプルのみコミットする）
-.env
+# worker-build の出力 (wasm と shim)
+/build

@@ -1,0 +1,48 @@
+{
+  // 1つの Worker が API と ダッシュボードの静的ファイルを
+  // 同じオリジンで配る (ADR-2)。
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "chikaku",
+  "main": "server/build/worker/shim.mjs",
+  "compatibility_date": "2026-08-20",
+
+  // workers-rs は wasm にビルドしてから shim を生成する。
+  "build": {
+    "command": "worker-build --release server"
+  },
+
+  "assets": {
+    // client のビルド出力。**Worker をデプロイする前に client をビルドすること。**
+    "directory": "./client/dist/",
+    "not_found_handling": "single-page-application",
+    "binding": "ASSETS",
+    // API のパスだけ Worker を先に通す。それ以外は静的ファイルが応答する。
+    "run_worker_first": ["/api/*"]
+  },
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "chikaku",
+      // wrangler d1 create chikaku で採番された値に置き換える
+      "database_id": "REPLACE_WITH_D1_DATABASE_ID",
+      "migrations_dir": "server/migrations"
+    }
+  ],
+
+  // 保持期間の掃除。常駐プロセスが無いので Cron で回す (ADR-4)。
+  "triggers": {
+    "crons": ["0 */6 * * *"]
+  },
+
+  "vars": {
+    // Cloudflare Access のチームドメインと、Access アプリケーションの AUD タグ。
+    // 秘密ではないが、これが誤っていると認証が通らない。
+    "CHIKAKU_TEAM_DOMAIN": "https://REPLACE_WITH_TEAM.cloudflareaccess.com",
+    "CHIKAKU_POLICY_AUD": "REPLACE_WITH_AUD_TAG",
+    "CHIKAKU_RETENTION_DAYS": "90",
+    "CHIKAKU_INVITE_TTL_MINUTES": "1440"
+  },
+
+  "observability": { "enabled": true }
+}

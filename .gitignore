@@ -1,1 +1,4 @@
 .DS_Store
+node_modules/
+# wrangler のローカル状態（Miniflare の D1 実体など）
+.wrangler/

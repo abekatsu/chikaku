@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use crate::error::AppError;
 use sha2::{Digest, Sha256};
 
 /// 招待コードで使う文字集合。
@@ -6,19 +6,22 @@ use sha2::{Digest, Sha256};
 /// 見間違えやすい 0 1 2 と B I L O S Z を最初から除いた 27 文字。
 const INVITE_ALPHABET: &[u8] = b"3456789ACDEFGHJKMNPQRTUVWXY";
 
-/// 秘密トークン (device_token / セッショントークン) の生成。
-/// 32 バイトの OS 乱数を hex 化して返す。
-pub fn generate_secret() -> Result<String> {
+fn random_bytes(buf: &mut [u8]) -> Result<(), AppError> {
+    getrandom::fill(buf).map_err(|e| AppError::Internal(format!("乱数の取得に失敗: {e}")))
+}
+
+/// 親端末の `device_token`。32 バイトの OS 乱数を hex 化して返す。
+pub fn generate_secret() -> Result<String, AppError> {
     let mut buf = [0u8; 32];
-    getrandom::fill(&mut buf).context("乱数の取得に失敗しました")?;
+    random_bytes(&mut buf)?;
     Ok(hex::encode(buf))
 }
 
 /// 8 桁の招待コード。27^8 ≒ 2.8e11 通り。
 /// 総当たりされないよう有効期限を短く保つ運用と併せて使う。
-pub fn generate_invite_code() -> Result<String> {
+pub fn generate_invite_code() -> Result<String, AppError> {
     let mut buf = [0u8; 8];
-    getrandom::fill(&mut buf).context("乱数の取得に失敗しました")?;
+    random_bytes(&mut buf)?;
     // アルファベットの長さが 2 の冪ではないため剰余に僅かな偏りが出るが、
     // 期限付き招待コードの用途では実害がない範囲として許容する。
     Ok(buf
@@ -41,6 +44,27 @@ pub fn normalize_invite_code(input: &str) -> String {
 /// 入力が 32 バイトの一様乱数なので、パスワードと違い伸長は不要。
 pub fn hash_secret(secret: &str) -> String {
     hex::encode(Sha256::digest(secret.as_bytes()))
+}
+
+/// `Authorization: Bearer <token>` を取り出す。
+/// スキーム名は大文字小文字を区別しない (RFC 7235)。
+pub fn bearer(header: Option<String>) -> Result<String, AppError> {
+    header
+        .as_deref()
+        .and_then(|v| {
+            let (scheme, token) = v.split_once(' ')?;
+            scheme
+                .eq_ignore_ascii_case("bearer")
+                .then_some(token.trim())
+        })
+        .filter(|t| !t.is_empty())
+        .map(str::to_owned)
+        .ok_or(AppError::Unauthorized)
+}
+
+/// UUID v4 を文字列で返す。
+pub fn new_id() -> String {
+    uuid::Uuid::new_v4().to_string()
 }
 
 #[cfg(test)]
@@ -71,5 +95,14 @@ mod tests {
         assert_eq!(a.len(), 64);
         assert_eq!(hash_secret(&a), hash_secret(&a));
         assert_ne!(hash_secret(&a), hash_secret(&b));
+    }
+
+    #[test]
+    fn bearer_parsing() {
+        assert_eq!(bearer(Some("Bearer abc".into())).unwrap(), "abc");
+        assert_eq!(bearer(Some("bearer abc".into())).unwrap(), "abc");
+        assert!(bearer(Some("Basic abc".into())).is_err());
+        assert!(bearer(Some("Bearer   ".into())).is_err());
+        assert!(bearer(None).is_err());
     }
 }

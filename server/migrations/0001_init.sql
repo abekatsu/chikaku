@@ -3,7 +3,10 @@
 -- 時刻は全て「UTC の Unix エポックミリ秒 (INTEGER)」で保持する。
 -- SQLite の TEXT 日時は表記ゆれ（秒精度・オフセット表記）で
 -- 大小比較が壊れるため、履歴の範囲検索を安全に行える整数表現を採る。
--- PostgreSQL へ移す際は BIGINT のまま移すか to_timestamp() で変換できる。
+--
+-- 注: D1 は JavaScript の BigInt を受け付けないため、アプリ側は i64 を
+-- f64 として bind する (ADR-4)。エポックミリ秒は 2^53 に遠く及ばず、
+-- INTEGER 列の型親和性で整数として格納される。
 
 CREATE TABLE families (
     id         TEXT    PRIMARY KEY,
@@ -11,33 +14,22 @@ CREATE TABLE families (
     created_at INTEGER NOT NULL
 );
 
+-- 子アカウント。
+-- パスワードは保存しない。認証は Cloudflare Access に委ね、
+-- Access JWT の email クレームとこの表を突き合わせる (ADR-3)。
 CREATE TABLE children_accounts (
-    id            TEXT    PRIMARY KEY,
-    family_id     TEXT    NOT NULL REFERENCES families(id) ON DELETE CASCADE,
-    email         TEXT    NOT NULL,
-    display_name  TEXT    NOT NULL,
-    -- Argon2id の PHC 文字列。ソルトとパラメータを内包する。
-    password_hash TEXT    NOT NULL,
-    created_at    INTEGER NOT NULL
+    id           TEXT    PRIMARY KEY,
+    family_id    TEXT    NOT NULL REFERENCES families(id) ON DELETE CASCADE,
+    email        TEXT    NOT NULL,
+    display_name TEXT    NOT NULL,
+    created_at   INTEGER NOT NULL
 );
 
--- 大文字小文字を無視して一意にする（ログイン時も lower() で引く）
+-- 大文字小文字を無視して一意にする（照合時も lower() で引く）
 CREATE UNIQUE INDEX idx_children_email ON children_accounts (lower(email));
 CREATE INDEX idx_children_family ON children_accounts (family_id);
 
--- 子アカウントのログインセッション。
--- トークン原文は保存せず SHA-256 のみ持つ（DB 流出時に成りすませないようにする）。
-CREATE TABLE child_sessions (
-    token_hash TEXT    PRIMARY KEY,
-    child_id   TEXT    NOT NULL REFERENCES children_accounts(id) ON DELETE CASCADE,
-    created_at INTEGER NOT NULL,
-    expires_at INTEGER NOT NULL
-);
-
-CREATE INDEX idx_sessions_expiry ON child_sessions (expires_at);
-CREATE INDEX idx_sessions_child ON child_sessions (child_id);
-
--- 親端末。device_token も原文は保存しない。
+-- 親端末。device_token の原文は保存せず SHA-256 のみ持つ。
 CREATE TABLE parent_devices (
     id           TEXT    PRIMARY KEY,
     family_id    TEXT    NOT NULL REFERENCES families(id) ON DELETE CASCADE,

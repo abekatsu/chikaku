@@ -1,0 +1,4 @@
+# getrandom 0.4 を wasm32-unknown-unknown で使うには
+# バックエンドの明示が要る (ADR-5)。Workers では crypto.getRandomValues が使われる。
+[target.wasm32-unknown-unknown]
+rustflags = ['--cfg', 'getrandom_backend="wasm_js"']

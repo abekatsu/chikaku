@@ -1,13 +1,11 @@
-use axum::Json;
-use axum::extract::{Path, Query, State};
-use axum::http::StatusCode;
 use serde::{Deserialize, Serialize};
+use worker::{D1Database, Response, Url};
 
-use crate::auth::extract::ChildAuth;
-use crate::auth::token::generate_invite_code;
+use crate::auth::ChildAuth;
 use crate::clock::{self, Millis};
+use crate::db;
 use crate::error::{AppError, AppResult};
-use crate::state::AppState;
+use crate::token;
 
 const DEFAULT_HISTORY_WINDOW_MS: Millis = 24 * 60 * 60 * 1_000;
 const DEFAULT_HISTORY_LIMIT: i64 = 1_000;
@@ -44,7 +42,7 @@ pub struct Fix {
     pub battery_level: i64,
 }
 
-#[derive(sqlx::FromRow)]
+#[derive(Deserialize)]
 struct LatestRow {
     id: String,
     device_name: String,
@@ -60,13 +58,14 @@ struct LatestRow {
 
 /// `GET /api/v1/families/{family_id}/latest`
 pub async fn latest(
-    State(state): State<AppState>,
-    auth: ChildAuth,
-    Path(family_id): Path<String>,
-) -> AppResult<Json<LatestResponse>> {
-    auth.scope(&family_id)?;
+    database: &D1Database,
+    auth: &ChildAuth,
+    family_id: &str,
+) -> AppResult<Response> {
+    auth.scope(family_id)?;
 
-    let rows: Vec<LatestRow> = sqlx::query_as(
+    let rows: Vec<LatestRow> = db::all(
+        database,
         "SELECT d.id, d.device_name, d.device_model, d.last_seen_at, \
                 e.lat, e.lng, e.accuracy, e.recorded_at, e.received_at, e.battery_level \
          FROM parent_devices d \
@@ -76,9 +75,8 @@ pub async fn latest(
          ) \
          WHERE d.family_id = ?1 AND d.revoked_at IS NULL \
          ORDER BY d.created_at",
+        &[db::text(family_id)],
     )
-    .bind(&family_id)
-    .fetch_all(&state.db)
     .await?;
 
     let devices = rows
@@ -105,19 +103,13 @@ pub async fn latest(
         })
         .collect();
 
-    Ok(Json(LatestResponse { family_id, devices }))
+    Ok(Response::from_json(&LatestResponse {
+        family_id: family_id.to_owned(),
+        devices,
+    })?)
 }
 
 // --------------------------------------------------------------- history
-
-#[derive(Debug, Deserialize)]
-pub struct HistoryQuery {
-    pub from: Option<String>,
-    pub to: Option<String>,
-    /// 指定すると 1 端末に絞る。
-    pub device_id: Option<String>,
-    pub limit: Option<i64>,
-}
 
 #[derive(Debug, Serialize)]
 pub struct HistoryResponse {
@@ -139,7 +131,7 @@ pub struct HistoryEvent {
     pub battery_level: i64,
 }
 
-#[derive(sqlx::FromRow)]
+#[derive(Deserialize)]
 struct HistoryRow {
     device_id: String,
     lat: f64,
@@ -153,41 +145,51 @@ struct HistoryRow {
 ///
 /// 期間を省略すると直近 24 時間。時刻は RFC 3339 で受け取る。
 pub async fn history(
-    State(state): State<AppState>,
-    auth: ChildAuth,
-    Path(family_id): Path<String>,
-    Query(q): Query<HistoryQuery>,
-) -> AppResult<Json<HistoryResponse>> {
-    auth.scope(&family_id)?;
+    database: &D1Database,
+    auth: &ChildAuth,
+    family_id: &str,
+    url: &Url,
+) -> AppResult<Response> {
+    auth.scope(family_id)?;
 
-    let to = parse_bound(q.to.as_deref(), "to")?.unwrap_or_else(clock::now);
-    let from = parse_bound(q.from.as_deref(), "from")?.unwrap_or(to - DEFAULT_HISTORY_WINDOW_MS);
+    let q = |key: &str| -> Option<String> {
+        url.query_pairs()
+            .find(|(k, _)| k == key)
+            .map(|(_, v)| v.into_owned())
+            .filter(|v| !v.trim().is_empty())
+    };
+
+    let to = parse_bound(q("to").as_deref(), "to")?.unwrap_or_else(clock::now);
+    let from = parse_bound(q("from").as_deref(), "from")?.unwrap_or(to - DEFAULT_HISTORY_WINDOW_MS);
     if from > to {
         return Err(AppError::BadRequest(
             "期間の指定が逆になっています。".to_owned(),
         ));
     }
-    let limit = q
-        .limit
+    let limit = q("limit")
+        .and_then(|v| v.parse::<i64>().ok())
         .unwrap_or(DEFAULT_HISTORY_LIMIT)
         .clamp(1, MAX_HISTORY_LIMIT);
+    let device_id = q("device_id");
 
     // device_id は任意指定なので、条件を SQL に分岐させず
     // 「NULL なら全件」を 1 本のクエリで表現する。
-    let rows: Vec<HistoryRow> = sqlx::query_as(
+    let rows: Vec<HistoryRow> = db::all(
+        database,
         "SELECT device_id, lat, lng, accuracy, recorded_at, battery_level \
          FROM location_events \
          WHERE family_id = ?1 AND recorded_at >= ?2 AND recorded_at <= ?3 \
            AND (?4 IS NULL OR device_id = ?4) \
          ORDER BY recorded_at ASC \
          LIMIT ?5",
+        &[
+            db::text(family_id),
+            db::num(from),
+            db::num(to),
+            db::opt_text(device_id.as_deref()),
+            db::num(limit),
+        ],
     )
-    .bind(&family_id)
-    .bind(from)
-    .bind(to)
-    .bind(q.device_id.as_deref())
-    .bind(limit)
-    .fetch_all(&state.db)
     .await?;
 
     let truncated = rows.len() as i64 == limit;
@@ -203,19 +205,19 @@ pub async fn history(
         })
         .collect();
 
-    Ok(Json(HistoryResponse {
-        family_id,
+    Ok(Response::from_json(&HistoryResponse {
+        family_id: family_id.to_owned(),
         from: clock::to_rfc3339(from),
         to: clock::to_rfc3339(to),
         truncated,
         events,
-    }))
+    })?)
 }
 
-fn parse_bound(raw: Option<&str>, name: &str) -> Result<Option<Millis>, AppError> {
-    match raw.map(str::trim).filter(|s| !s.is_empty()) {
+fn parse_bound(raw: Option<&str>, name: &str) -> AppResult<Option<Millis>> {
+    match raw {
         None => Ok(None),
-        Some(s) => clock::parse_rfc3339(s).map(Some).ok_or_else(|| {
+        Some(s) => clock::parse_rfc3339(s.trim()).map(Some).ok_or_else(|| {
             AppError::BadRequest(format!("{name} は RFC 3339 形式で指定してください。"))
         }),
     }
@@ -234,47 +236,51 @@ pub struct InviteResponse {
 /// 親端末をペアリングするための使い切りコードを発行する。
 /// CLAUDE.md §3.2 には無いが、これが無いと登録経路が存在しないため足している。
 pub async fn create_invite(
-    State(state): State<AppState>,
-    auth: ChildAuth,
-    Path(family_id): Path<String>,
-) -> AppResult<(StatusCode, Json<InviteResponse>)> {
-    auth.scope(&family_id)?;
+    database: &D1Database,
+    auth: &ChildAuth,
+    family_id: &str,
+    invite_ttl_ms: i64,
+) -> AppResult<Response> {
+    auth.scope(family_id)?;
 
     let now = clock::now();
-    let expires_at = now + state.config.invite_ttl.as_millis() as i64;
+    let expires_at = now + invite_ttl_ms;
 
     // 生成したコードが既存と衝突する確率は極めて低いが、
     // 一意制約違反で発行が失敗するのは避けたいので数回だけ引き直す。
     for _ in 0..5 {
-        let code = generate_invite_code()?;
-        let result = sqlx::query(
+        let code = token::generate_invite_code()?;
+        let inserted = db::run(
+            database,
             "INSERT OR IGNORE INTO invite_codes \
              (code, family_id, created_by, created_at, expires_at) \
              VALUES (?1, ?2, ?3, ?4, ?5)",
+            &[
+                db::text(&code),
+                db::text(family_id),
+                db::text(&auth.child_id),
+                db::num(now),
+                db::num(expires_at),
+            ],
         )
-        .bind(&code)
-        .bind(&family_id)
-        .bind(&auth.child_id)
-        .bind(now)
-        .bind(expires_at)
-        .execute(&state.db)
         .await?;
 
-        if result.rows_affected() == 1 {
-            tracing::info!(%family_id, child_id = %auth.child_id, "招待コードを発行しました");
-            return Ok((
-                StatusCode::CREATED,
-                Json(InviteResponse {
-                    code,
-                    expires_at: clock::to_rfc3339(expires_at),
-                }),
-            ));
+        if inserted == 1 {
+            worker::console_log!(
+                "招待コードを発行 family_id={family_id} child_id={}",
+                auth.child_id
+            );
+            return Ok(Response::from_json(&InviteResponse {
+                code,
+                expires_at: clock::to_rfc3339(expires_at),
+            })?
+            .with_status(201));
         }
     }
 
-    Err(AppError::Internal(anyhow::anyhow!(
-        "招待コードの生成に繰り返し失敗しました"
-    )))
+    Err(AppError::Internal(
+        "招待コードの生成に繰り返し失敗しました".into(),
+    ))
 }
 
 // --------------------------------------------------------------- devices
@@ -286,25 +292,51 @@ pub async fn create_invite(
 /// 生きたままなので、サーバー側にもこの操作が要る。
 /// 既に受け取った位置履歴は保持期間に従って自然に消える。
 pub async fn revoke_device(
-    State(state): State<AppState>,
-    auth: ChildAuth,
-    Path((family_id, device_id)): Path<(String, String)>,
-) -> AppResult<StatusCode> {
-    auth.scope(&family_id)?;
+    database: &D1Database,
+    auth: &ChildAuth,
+    family_id: &str,
+    device_id: &str,
+) -> AppResult<Response> {
+    auth.scope(family_id)?;
 
-    let result = sqlx::query(
+    let updated = db::run(
+        database,
         "UPDATE parent_devices SET revoked_at = ?1 \
          WHERE id = ?2 AND family_id = ?3 AND revoked_at IS NULL",
+        &[
+            db::num(clock::now()),
+            db::text(device_id),
+            db::text(family_id),
+        ],
     )
-    .bind(clock::now())
-    .bind(&device_id)
-    .bind(&family_id)
-    .execute(&state.db)
     .await?;
 
-    if result.rows_affected() == 0 {
+    if updated == 0 {
         return Err(AppError::NotFound);
     }
-    tracing::info!(%device_id, %family_id, "端末を無効化しました");
-    Ok(StatusCode::NO_CONTENT)
+    worker::console_log!("端末を無効化 device_id={device_id} family_id={family_id}");
+    Ok(Response::empty()?.with_status(204))
+}
+
+// ------------------------------------------------------------------ me
+
+#[derive(Debug, Serialize)]
+pub struct Profile {
+    pub child_id: String,
+    pub family_id: String,
+    pub email: String,
+    pub display_name: String,
+}
+
+/// `GET /api/v1/me`
+///
+/// Access を通過した本人が誰で、どの家族に属するかを返す。
+/// ダッシュボードは起動時にこれを呼んで family_id を得る。
+pub async fn me(auth: &ChildAuth) -> AppResult<Response> {
+    Ok(Response::from_json(&Profile {
+        child_id: auth.child_id.clone(),
+        family_id: auth.family_id.clone(),
+        email: auth.email.clone(),
+        display_name: auth.display_name.clone(),
+    })?)
 }

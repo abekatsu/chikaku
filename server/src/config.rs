@@ -1,54 +1,51 @@
-use std::net::SocketAddr;
-use std::time::Duration;
+use worker::Env;
 
-use anyhow::{Context, Result};
+use crate::error::{AppError, AppResult};
 
-/// 起動時に環境変数から読む設定。
-///
-/// TLS はここでは終端しない。CLAUDE.md §5 の「通信は全て TLS 必須」は
-/// 前段のリバースプロキシ (nginx / Caddy) で満たす前提で、
-/// 既定の待ち受けを 127.0.0.1 にしてプロキシ経由以外で外に出ないようにしている。
-#[derive(Debug, Clone)]
+/// Worker の設定。`wrangler.jsonc` の `vars` と Secrets から読む。
 pub struct Config {
-    pub database_url: String,
-    pub bind: SocketAddr,
-    /// 位置履歴の保持期間。無期限保存を避けるための上限 (CLAUDE.md §5)。
-    pub retention: Duration,
-    pub session_ttl: Duration,
-    pub invite_ttl: Duration,
-    /// ダッシュボードのオリジン。空なら CORS を一切許可しない。
-    pub cors_origins: Vec<String>,
+    /// 例: `https://<team>.cloudflareaccess.com`
+    pub team_domain: String,
+    /// Access アプリケーションの AUD タグ
+    pub policy_aud: String,
+    /// 位置履歴の保持期間（ミリ秒）。無期限保存を避けるための上限 (CLAUDE.md §5)。
+    pub retention_ms: i64,
+    /// 招待コードの有効期間（ミリ秒）
+    pub invite_ttl_ms: i64,
 }
 
 impl Config {
-    pub fn from_env() -> Result<Self> {
+    pub fn from_env(env: &Env) -> AppResult<Self> {
         Ok(Self {
-            database_url: env_or("CHIKAKU_DATABASE_URL", "sqlite://chikaku.db?mode=rwc"),
-            bind: env_or("CHIKAKU_BIND", "127.0.0.1:8080")
-                .parse()
-                .context("CHIKAKU_BIND は host:port 形式で指定してください")?,
-            retention: Duration::from_secs(parse_num("CHIKAKU_RETENTION_DAYS", 90)? * 86_400),
-            session_ttl: Duration::from_secs(parse_num("CHIKAKU_SESSION_TTL_HOURS", 720)? * 3_600),
-            invite_ttl: Duration::from_secs(parse_num("CHIKAKU_INVITE_TTL_MINUTES", 1_440)? * 60),
-            cors_origins: env_or("CHIKAKU_CORS_ORIGINS", "")
-                .split(',')
-                .map(str::trim)
-                .filter(|s| !s.is_empty())
-                .map(str::to_owned)
-                .collect(),
+            team_domain: required(env, "CHIKAKU_TEAM_DOMAIN")?
+                .trim_end_matches('/')
+                .to_owned(),
+            policy_aud: required(env, "CHIKAKU_POLICY_AUD")?,
+            retention_ms: number(env, "CHIKAKU_RETENTION_DAYS", 90) * 86_400_000,
+            invite_ttl_ms: number(env, "CHIKAKU_INVITE_TTL_MINUTES", 1_440) * 60_000,
         })
     }
 }
 
-fn env_or(key: &str, default: &str) -> String {
-    std::env::var(key).unwrap_or_else(|_| default.to_owned())
+/// 認証に関わる設定が欠けたまま起動すると、検証が素通りしかねない。
+/// 欠けている場合は 500 にして、開いたまま動き続けないようにする。
+fn required(env: &Env, key: &str) -> AppResult<String> {
+    env.var(key)
+        .map(|v| v.to_string())
+        .map_err(|_| AppError::Internal(format!("{key} が設定されていません")))
+        .and_then(|v| {
+            if v.trim().is_empty() {
+                Err(AppError::Internal(format!("{key} が空です")))
+            } else {
+                Ok(v)
+            }
+        })
 }
 
-fn parse_num(key: &str, default: u64) -> Result<u64> {
-    match std::env::var(key) {
-        Ok(v) => v
-            .parse()
-            .with_context(|| format!("{key} には正の整数を指定してください (指定値: {v})")),
-        Err(_) => Ok(default),
-    }
+fn number(env: &Env, key: &str, default: i64) -> i64 {
+    env.var(key)
+        .ok()
+        .and_then(|v| v.to_string().parse::<i64>().ok())
+        .filter(|n| *n > 0)
+        .unwrap_or(default)
 }

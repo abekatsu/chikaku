@@ -1,90 +1,137 @@
 # chikaku-server
 
 高齢者見守り位置情報システムのバックエンド（CLAUDE.md §3）。
-Android アプリからの位置情報を受け取って保存し、子側ダッシュボードに配信する。
+Cloudflare Workers 上で動く Rust (workers-rs) の Worker。
 
-- Rust / Axum 0.8 / SQLite (sqlx)
-- 認証はサーバー保持のトークン。パスワードは Argon2id
-- 位置履歴は保持期間（既定 90 日）で自動削除
+- **同じ Worker がダッシュボードの静的ファイルも配る**（単一オリジン、ADR-2）
+- データストアは D1（SQLite 互換、ADR-4）
+- 子アカウントの認証は Cloudflare Access に委ねる（ADR-3）
+- 位置履歴は保持期間（既定 90 日）で Cron Trigger により自動削除
 
-FCM プッシュ通知は未実装。MVP（フェーズ1）はダッシュボードのポーリングで
-成立するため、リアルタイム化はフェーズ2で足す。
+構成上の判断とその理由は [`docs/architecture-decisions.md`](../docs/architecture-decisions.md)、
+認証の詳細は [`docs/authentication.md`](../docs/authentication.md) を参照。
 
-## 動かす
+FCM プッシュ通知は未実装（フェーズ2）。
+
+## 前提
+
+| | |
+|---|---|
+| Node.js | **22 以上**（wrangler 4 の要求）。リポジトリ直下の `.tool-versions` で固定済み |
+| Rust | `rustup target add wasm32-unknown-unknown` |
+| worker-build | `cargo install worker-build`（0.8.1 以上） |
+
+## セットアップ
+
+### 1. D1 データベースを作る
 
 ```sh
-cp .env.example .env          # 必要なら編集
-cargo run -- create-family \
-  --family-name "我が家" \
-  --email "child@example.com" \
-  --display-name "長男" \
-  --password "12文字以上のパスワード"
-cargo run                     # 既定で serve
+npx wrangler d1 create chikaku
 ```
 
-`create-family` が出力する `family_id` はダッシュボードから使う。
+出力された `database_id` を `wrangler.jsonc`（リポジトリ直下）の
+`REPLACE_WITH_D1_DATABASE_ID` に書き込む。
 
-サインアップ用の公開エンドポイントは意図的に無い。家族数人で使う前提なので、
-誰でもアカウントを作れる口を開けるより運用者が CLI で作るほうが安全。
-きょうだいの追加は `add-child --family-id <id> ...`。
+```sh
+npm run db:migrate     # wrangler d1 migrations apply chikaku --remote
+```
 
-パスワードをシェル履歴に残したくない場合は `CHIKAKU_ADMIN_PASSWORD` で渡せる。
+### 2. Cloudflare Access を設定する
 
-### TLS
+Zero Trust > Access > Applications で **self-hosted アプリケーション**を作る。
 
-このサーバーは TLS を終端しない。CLAUDE.md §5 の「通信は全て TLS 必須」は
-前段のリバースプロキシ（nginx / Caddy）で満たす前提で、既定の待ち受けを
-`127.0.0.1` にしてプロキシを経由せずに外へ出ないようにしている。
-`CHIKAKU_BIND` を `0.0.0.0` にすると平文が外部に晒されるので注意。
+| # | ドメイン / パス | ポリシー |
+|---|---|---|
+| 1 | `<host>/api/v1/devices/register` | **Bypass**（全員） |
+| 2 | `<host>/api/v1/location` | **Bypass**（全員） |
+| 3 | `<host>/api/v1/healthz` | **Bypass**（全員） |
+| 4 | `<host>` | Allow（子アカウントのメールアドレスを列挙） |
 
-Android アプリは release ビルドで `https` 以外の送信先を拒否する。
+**1〜3 のバイパスは必須。** Android アプリは対話的ログインができないため、
+Access がサインインを要求すると動かなくなる。これらは招待コードと
+`device_token` で守られている（ADR-3）。
+
+アプリケーション 4 の **AUD タグ**と**チームドメイン**を `wrangler.jsonc` の
+`vars` に書き込む。
+
+```jsonc
+"vars": {
+  "CHIKAKU_TEAM_DOMAIN": "https://<team>.cloudflareaccess.com",
+  "CHIKAKU_POLICY_AUD": "<AUD タグ>"
+}
+```
+
+これらが誤っていると JWT 検証が通らず、ダッシュボードが全て 401 になる。
+
+### 3. 家族と子アカウントを登録する
+
+Workers に CLI は置けないため、`wrangler d1 execute` で直接入れる。
+パスワードは無い（Access が認証するため）。**ここに書いたメールアドレスと
+Access のポリシーの両方に載っている人だけがアクセスできる。**
+
+```sh
+npx wrangler d1 execute chikaku --remote --command "
+  INSERT INTO families (id, name, created_at)
+  VALUES (lower(hex(randomblob(16))), '我が家', unixepoch() * 1000);
+"
+
+npx wrangler d1 execute chikaku --remote --command "
+  INSERT INTO children_accounts (id, family_id, email, display_name, created_at)
+  SELECT lower(hex(randomblob(16))), id, 'child@example.com', '長男', unixepoch() * 1000
+  FROM families WHERE name = '我が家';
+"
+```
+
+きょうだいを足す場合は 2 番目の INSERT を繰り返す。
+
+### 4. デプロイ
+
+```sh
+npm --prefix client run build   # 先に client をビルドすること
+npm run deploy
+```
+
+`wrangler.jsonc` の `assets.directory` が `client/dist` を指しているため、
+**client のビルドが先**。この順序を守らないと古い（または存在しない）
+静的ファイルがデプロイされる。
 
 ## API
-
-認証・認可の設計と、その理由は [`docs/authentication.md`](../docs/authentication.md) にまとめてある。
 
 エラー本文は全て `{"error": "<機械可読コード>", "message": "<日本語>"}`。
 アプリは 4xx のとき `message` を高齢の利用者にそのまま表示するため、
 この文言に専門用語を入れない。
 
-### 親端末（Android）
+### 親端末（Android）— Access のバイパス対象
 
 `Authorization: Bearer <device_token>`
 
 | メソッド | パス | 用途 |
 |---|---|---|
-| POST | `/api/v1/devices/register` | 招待コードで端末を登録（認証不要） |
+| POST | `/api/v1/devices/register` | 招待コードで端末を登録（トークン不要） |
 | POST | `/api/v1/location` | 位置情報を 1 件送る |
 
-`POST /api/v1/devices/register`
-
-```json
+```jsonc
+// POST /api/v1/devices/register
 → {"invite_code": "NX6DC7VC", "device_name": "お父さんのスマホ", "device_model": "Pixel 9"}
 ← 200 {"device_id": "...", "device_token": "...", "family_id": "..."}
-```
 
-`device_token` は原文をこの応答で一度だけ返す。サーバーには SHA-256 しか残らない。
-招待コードは大文字小文字とハイフン・空白を無視して照合する（読み上げて入力する運用のため）。
-
-`POST /api/v1/location`
-
-```json
+// POST /api/v1/location
 → {"device_id":"...","lat":35.6812,"lng":139.7671,"accuracy":18.0,
    "timestamp":"2026-08-21T08:36:03.143Z","battery_level":62}
 ← 202 {"stored": true}
 ```
 
-`stored: false` は重複排除で既存行に畳まれたことを示す。端末側の挙動は変わらない。
+`device_token` は原文をこの応答で一度だけ返す。サーバーには SHA-256 しか残らない。
+招待コードは大文字小文字とハイフン・空白を無視して照合する（読み上げて入力する運用のため）。
+`stored: false` は重複排除で既存行に畳まれたことを示す。
 
-### 子アカウント（ダッシュボード）
+### 子アカウント（ダッシュボード）— Access の内側
 
-`Authorization: Bearer <session token>`
+`Cf-Access-Jwt-Assertion` は Cloudflare が付ける。ブラウザ側で用意するものは無い。
 
 | メソッド | パス | 用途 |
 |---|---|---|
-| POST | `/api/v1/auth/login` | ログイン（認証不要） |
-| POST | `/api/v1/auth/logout` | 今のセッションだけ失効 |
-| GET | `/api/v1/auth/me` | セッションの有効性確認 |
+| GET | `/api/v1/me` | 本人と所属家族の確認 |
 | GET | `/api/v1/families/{family_id}/latest` | 全端末の最新位置 |
 | GET | `/api/v1/families/{family_id}/history` | 移動履歴 |
 | POST | `/api/v1/families/{family_id}/invites` | 招待コード発行 |
@@ -100,17 +147,16 @@ Android アプリは release ビルドで `https` 以外の送信先を拒否す
 ### ステータスコードの意味
 
 アプリの再送ロジック（`ApiClient.kt` / `UploadWorker.kt`）がこれに依存している。
+**変えるとアプリの挙動が変わる。**
 
 | コード | サーバーが返す状況 | アプリの挙動 |
 |---|---|---|
 | 202 | 位置情報を受理 | キューから削除 |
 | 400 | 時刻・座標・電池残量が不正 | 再試行を打ち切って捨てる |
-| 401 | トークン失効、招待コード不正、他端末になりすまし | ペアリングし直し |
+| 401 | トークン失効、招待コード不正、なりすまし、JWT 不正 | ペアリングし直し |
+| 403 | Access は通ったが `children_accounts` に無いメール | ― |
 | 404 | 他家族の ID を指した | ― |
 | 5xx | サーバー側の問題 | 時間をおいて再送 |
-
-他家族の `family_id` を指したとき 403 ではなく 404 を返すのは、
-その ID が実在するという事実自体を漏らさないため（CLAUDE.md §5）。
 
 ## 設計上の判断
 
@@ -118,33 +164,45 @@ Android アプリは release ビルドで `https` 以外の送信先を拒否す
 SQLite の TEXT 日時は表記ゆれ（秒精度・オフセット表記）で大小比較が壊れ、
 履歴の範囲検索が静かに間違う。JSON では RFC 3339 に変換して出す。
 
+**D1 に整数を渡すときは必ず `db::num()` を通す。**
+D1 は JavaScript の BigInt を受け付けず、Rust の `i64` を直接 bind すると
+`D1_TYPE_ERROR` になる。`f64` として渡す（エポックミリ秒は 2^53 に遠く及ばない）。
+
 **重複排除を `(device_id, recorded_at)` の一意制約で行う。**
 アプリはオフライン時にキューを持ち WorkManager で再送するため、
 応答だけが失われた再送で同じ測位が二度届きうる。
 
-**sqlx のコンパイル時検証マクロ（`query!`）を使わず実行時検証のクエリにしている。**
-`query!` はビルド時に DB か `.sqlx` オフラインキャッシュを要求し、
-そのために sqlx-cli の導入が前提になる。型の取り違えはテストで捕まえる。
-
-**保持期間の掃除は 6 時間ごとの常駐タスク。**
-`cargo run -- sweep` で手動実行もできる。位置履歴に加えて、失効セッションと
-使われなかった招待コードも落とす。
+**招待コードの引き換えは行数で判定する。**
+D1 の `batch` は SQL トランザクションだが、ロールバックされるのは文が
+失敗したときだけで「更新 0 行」では起きない。条件付き INSERT と
+EXISTS 付き UPDATE を組み合わせ、両方が 1 行のときだけ成立とみなす。
 
 ## 開発
 
 ```sh
-cargo test                              # 単体 6 + 結合 23
-cargo clippy --all-targets -- -D warnings
+cargo test                                          # 単体 9 件
+cargo clippy --target wasm32-unknown-unknown -- -D warnings
 cargo fmt --check
+npm run test:server                                 # e2e 29 件
 ```
 
-結合テストは Android 側が前提にしている契約 ―― ステータスコードの意味と
-JSON の形 ―― を固定している。アプリの `ApiClient.kt` を変える際は
-`tests/api.rs` も併せて見ること。
+### e2e テストについて
+
+`server/tests/e2e.mjs` は `wrangler dev --local` に対して実走する。
+Android 側が前提にしている契約 ―― ステータスコードの意味と JSON の形 ――
+をここで固定している。アプリの `ApiClient.kt` を変える際は併せて見ること。
+
+**Cloudflare Access の検証は迂回していない。** テストは自前の RSA 鍵で
+JWKS を配るローカルサーバーを立て、Worker にそこを向かせる。
+したがって署名検証・`aud`・`iss`・`exp`・`kid` の判定は本番と同じ経路を通り、
+署名改ざん・クレーム差し替え・期限切れを実際に拒否できることを確認している。
+
+ローカル実行には専用の設定 `server/wrangler.test.jsonc` を使う。
+本番の `wrangler.jsonc` と分けているのは、静的アセット（`client/dist`）を
+要求せず、チームドメインをローカルの JWKS サーバーに向けるため。
 
 ## 未実装
 
 - FCM HTTP v1 でのプッシュ通知（フェーズ2）
 - ジオフェンス通過イベントの受信（フェーズ3）
-- パスワード変更・リセット
-- レート制限（招待コードの総当たり対策は現状「短い有効期限」のみ）
+- 招待コード発行・端末登録のレート制限

@@ -1,33 +1,77 @@
-use anyhow::{Context, Result};
-use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
-use sqlx::{Pool, Sqlite};
-use std::str::FromStr;
-use std::time::Duration;
+//! D1 への薄いラッパ。
+//!
+//! **D1 は JavaScript の BigInt を受け付けない** (ADR-4)。Rust の `i64` を
+//! そのまま bind すると `D1_TYPE_ERROR` になるため、必ず `num()` を通して
+//! `f64` として渡す。エポックミリ秒は 2^53 に遠く及ばないので精度は失われない。
 
-pub type Db = Pool<Sqlite>;
+use serde::de::DeserializeOwned;
+use wasm_bindgen::JsValue;
+use worker::D1Database;
 
-pub async fn connect(database_url: &str) -> Result<Db> {
-    let options = SqliteConnectOptions::from_str(database_url)
-        .with_context(|| format!("接続文字列を解釈できません: {database_url}"))?
-        .create_if_missing(true)
-        // 参照整合性は既定で無効なので明示的に入れる。
-        .foreign_keys(true)
-        // 書き込み中も読み取りを止めないようにする。
-        .journal_mode(sqlx::sqlite::SqliteJournalMode::Wal)
-        .synchronous(sqlx::sqlite::SqliteSynchronous::Normal)
-        .busy_timeout(Duration::from_secs(5));
+use crate::error::AppResult;
 
-    let pool = SqlitePoolOptions::new()
-        .max_connections(8)
-        .acquire_timeout(Duration::from_secs(10))
-        .connect_with(options)
-        .await
-        .context("データベースに接続できませんでした")?;
+/// 整数を D1 に渡せる形にする。**i64 を直接 into() しないこと。**
+pub fn num(v: i64) -> JsValue {
+    JsValue::from_f64(v as f64)
+}
 
-    sqlx::migrate!("./migrations")
-        .run(&pool)
-        .await
-        .context("マイグレーションに失敗しました")?;
+pub fn real(v: f64) -> JsValue {
+    JsValue::from_f64(v)
+}
 
-    Ok(pool)
+pub fn text(v: &str) -> JsValue {
+    JsValue::from_str(v)
+}
+
+/// 省略可能なパラメータ。`?N IS NULL OR col = ?N` の形で使う。
+pub fn opt_text(v: Option<&str>) -> JsValue {
+    match v {
+        Some(s) => JsValue::from_str(s),
+        None => JsValue::NULL,
+    }
+}
+
+/// 1 行だけ取る。行が無ければ `None`。
+pub async fn first<T: DeserializeOwned>(
+    db: &D1Database,
+    sql: &str,
+    params: &[JsValue],
+) -> AppResult<Option<T>> {
+    Ok(db.prepare(sql).bind(params)?.first::<T>(None).await?)
+}
+
+/// 全行取る。
+pub async fn all<T: DeserializeOwned>(
+    db: &D1Database,
+    sql: &str,
+    params: &[JsValue],
+) -> AppResult<Vec<T>> {
+    let result = db.prepare(sql).bind(params)?.all().await?;
+    Ok(result.results::<T>()?)
+}
+
+/// 更新系を実行して、影響を受けた行数を返す。
+pub async fn run(db: &D1Database, sql: &str, params: &[JsValue]) -> AppResult<u64> {
+    let result = db.prepare(sql).bind(params)?.run().await?;
+    Ok(changes(&result))
+}
+
+/// 複数文をひとまとまりで実行する。
+/// D1 の `batch` は SQL トランザクションとして働き、
+/// 途中で失敗すると全体がロールバックされる (ADR-4)。
+pub async fn batch(
+    db: &D1Database,
+    statements: Vec<worker::D1PreparedStatement>,
+) -> AppResult<Vec<u64>> {
+    let results = db.batch(statements).await?;
+    Ok(results.iter().map(changes).collect())
+}
+
+fn changes(result: &worker::D1Result) -> u64 {
+    result
+        .meta()
+        .ok()
+        .flatten()
+        .and_then(|m| m.changes)
+        .unwrap_or(0) as u64
 }

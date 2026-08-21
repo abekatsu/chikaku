@@ -119,6 +119,9 @@ project-root/
 
 ## 8. 未確定事項（実装開始前に決める）
 
+> **決定済みの項目は [docs/architecture-decisions.md](docs/architecture-decisions.md) に記録している。**
+> フロントエンド技術選定・ホスティング環境・親デバイスとfamilyの紐付け方法・履歴の保持期間は決定済み。
+
 - フロントエンドの技術選定（素のJS / React / 他）
 - ホスティング環境（自宅サーバー / VPS / クラウド）
 - 親デバイスとfamilyの紐付け方法（招待コード等）

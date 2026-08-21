@@ -184,7 +184,8 @@ chikaku.serverBaseUrl=https://your-server.example.com/
 
 ## 5. サーバー実装時に必要な契約
 
-> サーバーは実装済み（`server/`）。認証設計は [authentication.md](authentication.md) を参照。
+> サーバーは実装済み（`server/`、Cloudflare Workers + D1）。
+> 構成の判断は [architecture-decisions.md](architecture-decisions.md)、認証は [authentication.md](authentication.md) を参照。
 
 **これらの形はアプリ側で先に決めたもの。Rust 側の実装をここへ合わせる必要がある。**
 

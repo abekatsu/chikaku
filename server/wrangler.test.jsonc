@@ -1,0 +1,24 @@
+{
+  // e2e テスト専用の設定。本番の wrangler.jsonc とは別に持つ理由:
+  //  - 静的アセット (client/dist) を要求しない。API だけを対象にする
+  //  - Access のチームドメインをテストが立てるローカル JWKS サーバーに向ける
+  //    → 検証経路を迂回せず、本物と同じ RS256 検証を通す
+  "name": "chikaku-test",
+  "main": "build/worker/shim.mjs",
+  "compatibility_date": "2026-08-20",
+  "build": { "command": "worker-build --release server" },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "chikaku-test",
+      "database_id": "local-test-only",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "vars": {
+    "CHIKAKU_TEAM_DOMAIN": "http://127.0.0.1:8799",
+    "CHIKAKU_POLICY_AUD": "test-aud-tag",
+    "CHIKAKU_RETENTION_DAYS": "90",
+    "CHIKAKU_INVITE_TTL_MINUTES": "1440"
+  }
+}
