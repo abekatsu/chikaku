@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- debug ビルド専用。MVP の疎通確認（CLAUDE.md §6-1）で、TLSを立てていない
+     開発用サーバーに繋げるようにするためだけのもの。release には含まれない。 -->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">localhost</domain>
+        <!-- Android エミュレータからホストPCを指すアドレス -->
+        <domain includeSubdomains="true">10.0.2.2</domain>
+        <!-- 実機を同じLANに繋いで試す場合の一般的なプライベートIP帯 -->
+        <domain includeSubdomains="true">192.168.0.0</domain>
+    </domain-config>
+</network-security-config>

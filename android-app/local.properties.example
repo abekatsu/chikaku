@@ -1,0 +1,10 @@
+# local.properties にコピーして使う（このファイル自体はコミットしてよいが、
+# local.properties は .gitignore 済み）。
+#
+# Android SDK の場所（Android Studio が自動で書き込む）
+sdk.dir=/Users/YOUR_NAME/Library/Android/sdk
+
+# バックエンドサーバーのベースURL。末尾のスラッシュは付けても付けなくてもよい。
+# 未設定の場合は BuildConfig.DEFAULT_SERVER_BASE_URL のプレースホルダが使われ、
+# アプリ内の「詳細設定」から実行時に上書きできる。
+chikaku.serverBaseUrl=https://chikaku.example.com/
