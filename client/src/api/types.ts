@@ -1,0 +1,69 @@
+/**
+ * サーバーが返す JSON の形。`server/src/routes/*.rs` の Serialize 構造体と対。
+ * **サーバー側を変えたらここも変える。**
+ */
+
+export interface Profile {
+  child_id: string;
+  family_id: string;
+  email: string;
+  display_name: string;
+}
+
+/** 1回の測位。 */
+export interface Fix {
+  lat: number;
+  lng: number;
+  /** 測位誤差の半径（メートル） */
+  accuracy: number;
+  /** 端末が測位した時刻 (RFC 3339) */
+  recorded_at: string;
+  /** サーバーが受信した時刻。圏外で溜まっていた分はここが大きく遅れる。 */
+  received_at: string;
+  /** 取得できなかった場合は -1 */
+  battery_level: number;
+}
+
+export interface DeviceLatest {
+  device_id: string;
+  device_name: string;
+  device_model: string;
+  /** 最後にサーバーと通信できた時刻。位置が動かなくても更新される。 */
+  last_seen_at: string | null;
+  /** 一度も送信していない端末では null */
+  latest: Fix | null;
+}
+
+export interface LatestResponse {
+  family_id: string;
+  devices: DeviceLatest[];
+}
+
+export interface HistoryEvent {
+  device_id: string;
+  lat: number;
+  lng: number;
+  accuracy: number;
+  recorded_at: string;
+  battery_level: number;
+}
+
+export interface HistoryResponse {
+  family_id: string;
+  from: string;
+  to: string;
+  /** 上限に達して打ち切られたか。true なら範囲を狭めて引き直す。 */
+  truncated: boolean;
+  events: HistoryEvent[];
+}
+
+export interface InviteResponse {
+  code: string;
+  expires_at: string;
+}
+
+/** エラー本文。`message` は日本語でそのまま表示してよい。 */
+export interface ErrorBody {
+  error: string;
+  message: string;
+}

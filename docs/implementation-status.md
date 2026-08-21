@@ -9,11 +9,14 @@
 | コンポーネント | 状態 | 備考 |
 |---|---|---|
 | **Androidアプリ（親側）** | **MVP実装完了** | debug / release 両方ビルド成功、lint エラー0 |
-| バックエンドサーバー（Rust） | 未着手 | `server/` は空。APIの契約はアプリ側で先行定義済み（§6） |
-| Webダッシュボード（子側） | 未着手 | `client/` は空 |
+| **バックエンドサーバー** | **実装完了** | Cloudflare Workers (Rust) + D1。単体9件 / e2e29件 |
+| **Webダッシュボード（子側）** | **実装完了** | Vite + React + TypeScript。地図・履歴・招待コード発行・端末解除 |
 
-CLAUDE.md §6 の開発フェーズでいうと、**フェーズ1（MVP疎通確認）の Android 側が完了**した段階。
-サーバーが立ち上がれば、そのまま疎通確認に入れる。
+CLAUDE.md §6 の開発フェーズでいうと、**フェーズ1（MVP疎通確認）の実装が3コンポーネントとも完了**した段階。
+残るのは実環境（Cloudflare アカウント）への配備と、実機での疎通確認。
+
+構成上の判断は [architecture-decisions.md](architecture-decisions.md)、認証は
+[authentication.md](authentication.md) に分けて記録している。
 
 ---
 
@@ -240,10 +243,14 @@ chikaku.serverBaseUrl=https://your-server.example.com/
 
 ### プロジェクト全体
 
-- `server/`（Rust + Axum）の実装
-- `client/`（Webダッシュボード）の実装。CLAUDE.md の構成案では `dashboard/` という名前
+- **実環境への配備。** `wrangler.jsonc` の3つのプレースホルダ（D1 の database_id、
+  Access のチームドメインと AUD タグ）が未設定
+- **Cloudflare Access のアプリケーション定義。** 親端末用エンドポイントの
+  バイパス設定を含む（`server/README.md` の表を参照）
+- **実機での疎通確認。** Android 実機 → Worker → ダッシュボードの通し確認は未実施
+- レート制限（招待コード発行・端末登録の総当たり対策）
 - FCM Web Push 統合（フェーズ2）
-- **このディレクトリはまだ git リポジトリではない**（`.gitignore` は用意済みだが `git init` 未実行）
+- ジオフェンス（フェーズ3）
 
 ### CLAUDE.md §8 の未確定事項の現状
 

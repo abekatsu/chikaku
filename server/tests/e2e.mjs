@@ -10,18 +10,17 @@
  * 署名検証・aud・iss・exp の判定は本番と同じ経路を通る。
  */
 import { spawn, execFile } from "node:child_process";
-import { createServer } from "node:http";
 import { rm } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { promisify } from "node:util";
-import { generateKeyPair, exportJWK, SignJWT } from "jose";
+import { startAccessStub, DEFAULT_AUDIENCE } from "../../scripts/access-stub.mjs";
 
 const execFileAsync = promisify(execFile);
 
 const WORKER_PORT = 8798;
 const JWKS_PORT = 8799;
 const ISSUER = `http://127.0.0.1:${JWKS_PORT}`;
-const AUDIENCE = "test-aud-tag";
+const AUDIENCE = DEFAULT_AUDIENCE;
 const CONFIG = "server/wrangler.test.jsonc";
 const PERSIST = ".wrangler/test-state";
 const BASE = `http://127.0.0.1:${WORKER_PORT}/api/v1`;
@@ -48,34 +47,17 @@ function assertEqual(actual, expected, message = "") {
 
 // ---------------------------------------------------------------- 認証情報の生成
 
-let signingKey;
-let jwks;
+let stub;
 
-async function setupKeys() {
-  const { publicKey, privateKey } = await generateKeyPair("RS256", { extractable: true });
-  const jwk = await exportJWK(publicKey);
-  jwk.kid = "test-kid";
-  jwk.alg = "RS256";
-  jwk.use = "sig";
-  jwks = { keys: [jwk] };
-  signingKey = privateKey;
-}
-
-async function mintJwt({
-  email = "child-a@example.com",
-  audience = AUDIENCE,
-  issuer = ISSUER,
-  expiresIn = "1h",
-  extra = {},
-  kid = "test-kid",
-} = {}) {
-  return new SignJWT({ email, type: "app", ...extra })
-    .setProtectedHeader({ alg: "RS256", kid })
-    .setIssuer(issuer)
-    .setAudience(audience)
-    .setIssuedAt()
-    .setExpirationTime(expiresIn)
-    .sign(signingKey);
+async function mintJwt({ email, audience, issuer, expiresIn, extra, kid } = {}) {
+  return stub.mintJwt({
+    ...(email !== undefined && { email }),
+    ...(audience !== undefined && { aud: audience }),
+    ...(issuer !== undefined && { iss: issuer }),
+    ...(expiresIn !== undefined && { expiresIn }),
+    ...(extra !== undefined && { extra }),
+    ...(kid !== undefined && { kid }),
+  });
 }
 
 // ---------------------------------------------------------------- HTTP 呼び出し
@@ -472,19 +454,6 @@ test("healthz は認証不要", async () => {
 
 // ================================================================ 実行
 
-async function startJwksServer() {
-  const server = createServer((req, res) => {
-    if (req.url === "/cdn-cgi/access/certs") {
-      res.writeHead(200, { "content-type": "application/json" });
-      res.end(JSON.stringify(jwks));
-    } else {
-      res.writeHead(404).end();
-    }
-  });
-  await new Promise((resolve) => server.listen(JWKS_PORT, "127.0.0.1", resolve));
-  return server;
-}
-
 async function waitForWorker(timeoutMs = 180_000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -500,12 +469,11 @@ async function waitForWorker(timeoutMs = 180_000) {
 }
 
 async function main() {
-  await setupKeys();
   // 毎回まっさらな DB から始める。
   await rm(PERSIST, { recursive: true, force: true });
 
-  const jwksServer = await startJwksServer();
-  console.log(`JWKS サーバー: ${ISSUER}`);
+  stub = await startAccessStub({ port: JWKS_PORT });
+  console.log(`Access の代役: ${stub.issuer}`);
 
   console.log("マイグレーションを適用しています…");
   await execFileAsync("npx", [
@@ -526,7 +494,7 @@ async function main() {
 
   const cleanup = () => {
     worker.kill("SIGTERM");
-    jwksServer.close();
+    stub.close();
   };
   process.on("exit", cleanup);
 

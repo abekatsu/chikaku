@@ -3,9 +3,11 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "build": "npm --prefix client run build",
+    "deploy": "npm run build && wrangler deploy",
     "test:server": "node server/tests/e2e.mjs",
-    "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
+    "typecheck": "npm --prefix client run typecheck",
     "db:migrate": "wrangler d1 migrations apply chikaku --remote"
   },
   "devDependencies": {
