@@ -41,6 +41,8 @@ Android アプリは release ビルドで `https` 以外の送信先を拒否す
 
 ## API
 
+認証・認可の設計と、その理由は [`docs/authentication.md`](../docs/authentication.md) にまとめてある。
+
 エラー本文は全て `{"error": "<機械可読コード>", "message": "<日本語>"}`。
 アプリは 4xx のとき `message` を高齢の利用者にそのまま表示するため、
 この文言に専門用語を入れない。
