@@ -156,6 +156,7 @@ npm run deploy
 | 401 | トークン失効、招待コード不正、なりすまし、JWT 不正 | ペアリングし直し |
 | 403 | Access は通ったが `children_accounts` に無いメール | ― |
 | 404 | 他家族の ID を指した | ― |
+| 429 | レート制限に掛かった | 時間をおいて再送 |
 | 5xx | サーバー側の問題 | 時間をおいて再送 |
 
 ## 設計上の判断
@@ -172,6 +173,15 @@ D1 は JavaScript の BigInt を受け付けず、Rust の `i64` を直接 bind 
 アプリはオフライン時にキューを持ち WorkManager で再送するため、
 応答だけが失われた再送で同じ測位が二度届きうる。
 
+**レート制限は Worker 内蔵の `ratelimit` バインディングで刻む。**
+WAF の Rate Limiting Rules はゾーン配下の機能で、独自ドメインを持たない
+この配備（workers.dev）では使えない。端末登録は送信元 IP で 5 回/60 秒、
+招待コードの発行は子アカウント単位で 10 回/60 秒。位置送信は刻まない
+（長期圏外から復帰した端末のキュー掃き出しを絞ってしまうため）。
+カウンタは Cloudflare のロケーション単位なので、接続を分散されれば
+設定値は超えられる。**速度制限であって試行回数の上限ではない。**
+詳細は [`docs/implementation-status.md` §4.5](../docs/implementation-status.md)。
+
 **招待コードの引き換えは行数で判定する。**
 D1 の `batch` は SQL トランザクションだが、ロールバックされるのは文が
 失敗したときだけで「更新 0 行」では起きない。条件付き INSERT と
@@ -183,7 +193,7 @@ EXISTS 付き UPDATE を組み合わせ、両方が 1 行のときだけ成立�
 cargo test                                          # 単体 9 件
 cargo clippy --target wasm32-unknown-unknown -- -D warnings
 cargo fmt --check
-npm run test:server                                 # e2e 29 件
+npm run test:server                                 # e2e 30 件
 ```
 
 ### e2e テストについて
@@ -205,4 +215,4 @@ JWKS を配るローカルサーバーを立て、Worker にそこを向かせ�
 
 - FCM HTTP v1 でのプッシュ通知（フェーズ2）
 - ジオフェンス通過イベントの受信（フェーズ3）
-- 招待コード発行・端末登録のレート制限
+

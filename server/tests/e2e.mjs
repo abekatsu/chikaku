@@ -151,6 +151,23 @@ test("招待コードは一度しか使えない", async () => {
   assertEqual(second.body.error, "invalid_invite_code");
 });
 
+test("招待コードの連続発行は 429 で止まる", async () => {
+  // wrangler.test.jsonc の RL_INVITE は毎分 5 回。制限は子アカウント単位で
+  // 刻まれるため、seedFamily が作る別アカウントを使う他のテストには影響しない。
+  //
+  // 429 は Android 側で「一時的な失敗」として再試行に回る
+  // (ApiClient.execute の 408/429 分岐)。コードを変えるとアプリの挙動が変わる。
+  const family = await seedFamily("ratelimit@example.com");
+  const codes = [];
+  for (let i = 0; i < 6; i += 1) {
+    codes.push((await api("POST", `/families/${family.familyId}/invites`, { jwt: family.jwt })).status);
+  }
+
+  assertEqual(codes.slice(0, 5).join(","), "201,201,201,201,201", "上限までは発行できるはず");
+  const last = codes[5];
+  assertEqual(last, 429, `6 回目が止まらなかった: ${codes.join(",")}`);
+});
+
 test("招待コードは小文字・ハイフン混じりでも通る", async () => {
   const family = await seedFamily("lower@example.com");
   const invite = await api("POST", `/families/${family.familyId}/invites`, { jwt: family.jwt });

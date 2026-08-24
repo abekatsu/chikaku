@@ -15,6 +15,18 @@
       "migrations_dir": "migrations"
     }
   ],
+  // 本番と同じ経路を通す。バインディングを省くと ratelimit::check が
+  // 500 で落ちるため、宣言は必須。
+  //
+  // RL_REGISTER は送信元 IP で刻まれ、ローカルでは全テストが同じ IP に
+  // なるので、他のテストを巻き込まないよう上限を上げてある。
+  // RL_INVITE は子アカウント単位で刻まれ seedFamily がテストごとに
+  // 別アカウントを作るため、本番に近い小さな値のまま 429 を実際に確認できる。
+  "ratelimits": [
+    { "name": "RL_REGISTER", "namespace_id": "1001", "simple": { "limit": 1000, "period": 60 } },
+    { "name": "RL_INVITE", "namespace_id": "1002", "simple": { "limit": 5, "period": 60 } }
+  ],
+
   "vars": {
     "CHIKAKU_TEAM_DOMAIN": "http://127.0.0.1:8799",
     "CHIKAKU_POLICY_AUD": "test-aud-tag",

@@ -31,6 +31,11 @@ pub enum AppError {
 
     BadRequest(String),
 
+    /// 短時間に試行が集中した。招待コードの総当たりを想定する。
+    /// Android は 429 を一時的な失敗として扱い、再試行に回す
+    /// (`ApiClient.execute` の 408/429 分岐)。
+    TooManyRequests,
+
     /// 内部エラー。原因はログにだけ残しクライアントには返さない。
     Internal(String),
 }
@@ -55,6 +60,11 @@ impl AppError {
             ),
             Self::NotFound => (404, "not_found", "見つかりませんでした。".to_owned()),
             Self::BadRequest(m) => (400, "bad_request", m.clone()),
+            Self::TooManyRequests => (
+                429,
+                "too_many_requests",
+                "試行が多すぎます。しばらく待ってからお試しください。".to_owned(),
+            ),
             Self::Internal(_) => (
                 500,
                 "internal_error",

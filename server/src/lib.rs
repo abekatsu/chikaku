@@ -9,6 +9,7 @@ mod clock;
 mod config;
 mod db;
 mod error;
+mod ratelimit;
 mod retention;
 mod routes;
 mod token;
@@ -71,6 +72,8 @@ async fn route(mut req: Request, env: Env) -> AppResult<Response> {
     match (&method, rest) {
         // ---- 親端末 (Cloudflare Access のバイパス対象) ----
         (Method::Post, ["devices", "register"]) => {
+            // 招待コードの総当たり対策。認証前の経路なので送信元 IP で刻む。
+            ratelimit::check(&env, ratelimit::REGISTER, &ratelimit::client_ip(&req)).await?;
             let body = req.json().await.map_err(|_| {
                 AppError::BadRequest("リクエストの形式が正しくありません。".to_owned())
             })?;
@@ -103,6 +106,9 @@ async fn route(mut req: Request, env: Env) -> AppResult<Response> {
 
         (Method::Post, ["families", family_id, "invites"]) => {
             let auth = auth::child(&req, &database, &config).await?;
+            // 発行を無制限にすると、有効な招待コードが同時に何本も存在しうる。
+            // 認証済みなので IP ではなく本人で刻む。
+            ratelimit::check(&env, ratelimit::INVITE, &auth.child_id).await?;
             routes::families::create_invite(&database, &auth, family_id, config.invite_ttl_ms).await
         }
 

@@ -30,6 +30,21 @@
     }
   ],
 
+  // 招待コード発行と端末登録の総当たり対策。
+  // WAF の Rate Limiting Rules はゾーン配下の機能で、独自ドメインを
+  // 持たない本システム (workers.dev) では使えないため Worker 内蔵の
+  // バインディングを使う。period は 10 か 60 秒のみ。
+  //
+  // 端末登録は「親が手で入力する」操作なので毎分5回で足りる。
+  // 招待コードの発行も同様に、人の操作としては毎分10回で十分。
+  // 位置送信 (/api/v1/location) は刻まない。長期圏外から復帰した端末が
+  // 溜めたキューを一気に掃き出すため、正常な動作を絞ってしまう。
+  // あちらは 32 バイトの device_token で守られており総当たりは成立しない。
+  "ratelimits": [
+    { "name": "RL_REGISTER", "namespace_id": "1001", "simple": { "limit": 5, "period": 60 } },
+    { "name": "RL_INVITE", "namespace_id": "1002", "simple": { "limit": 10, "period": 60 } }
+  ],
+
   // 保持期間の掃除。常駐プロセスが無いので Cron で回す (ADR-4)。
   "triggers": {
     "crons": ["0 */6 * * *"]
