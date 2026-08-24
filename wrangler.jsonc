@@ -24,7 +24,7 @@
     {
       "binding": "DB",
       "database_name": "chikaku",
-      // wrangler d1 create chikaku で採番された値に置き換える
+      // wrangler d1 create chikaku で採番された値。作り直したら書き換える。
       "database_id": "REPLACE_WITH_D1_DATABASE_ID",
       "migrations_dir": "server/migrations"
     }
@@ -39,7 +39,7 @@
     // Cloudflare Access のチームドメインと、Access アプリケーションの AUD タグ。
     // 秘密ではないが、これが誤っていると認証が通らない。
     "CHIKAKU_TEAM_DOMAIN": "https://REPLACE_WITH_TEAM.cloudflareaccess.com",
-    "CHIKAKU_POLICY_AUD": "REPLACE_WITH_AUD_TAG",
+    "CHIKAKU_POLICY_AUD": "REPLACE_WITH_ACCESS_APPLICATION_AUD",
     "CHIKAKU_RETENTION_DAYS": "90",
     "CHIKAKU_INVITE_TTL_MINUTES": "1440"
   },

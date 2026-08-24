@@ -7,7 +7,7 @@
 - 認証・認可の設計 → [authentication.md](authentication.md)
 - 各コンポーネントの使い方 → `server/README.md`, `client/README.md`
 
-最終更新: 2026-08-21
+最終更新: 2026-08-24
 
 ---
 
@@ -30,11 +30,11 @@
 | **Androidアプリ（親側）** | 実装完了 | Kotlin 23ファイル。debug / release 両方ビルド成功 |
 | **サーバー** | 実装完了 | Cloudflare Workers (Rust) + D1。単体9件 / e2e29件 |
 | **ダッシュボード（子側）** | 実装完了 | Vite + React + TypeScript。地図・履歴・招待・解除 |
-| **実環境への配備** | **未実施** | Cloudflare アカウント側の設定が未了（§7） |
-| **実機での疎通確認** | **未実施** | Android 実機 → Worker → 画面の通しは未検証 |
+| **実環境への配備** | 完了 | `https://chikaku.<subdomain>.workers.dev`。D1・Access・Cron すべて稼働（§7.2） |
+| **実機での疎通確認** | **未実施** | HTTP レベルの通しは本番で確認済み。Android 実機からは未検証 |
 
 CLAUDE.md §6 のフェーズでいうと、**フェーズ1（MVP疎通確認）の実装が3コンポーネントとも完了**し、
-配備と実機確認だけが残っている状態。
+配備は完了し、**Android 実機からの確認だけが残っている状態**。
 
 **1つの Worker が API とダッシュボードの静的ファイルを同じオリジンで配る。**
 デプロイ対象はサーバーとクライアントで分かれていない（ADR-2）。
@@ -339,14 +339,41 @@ Android 側が前提にするステータスコードの意味も e2e で固定�
 | 404 | 他家族の ID を指した | ― |
 | 5xx | サーバー側の問題 | 時間をおいて再送 |
 
-### 6.2 確認できていないこと
+### 6.2 本番環境で確認したこと
 
-- **実環境で動いていない。** Cloudflare へのデプロイは未実施
-- **Android 実機からの通し確認が無い。** アプリ → Worker → 画面の疎通は
-  e2e テスト（HTTP レベル）でしか確認していない
+2026-08-24 の配備後、`https://chikaku.<subdomain>.workers.dev` に対して実際に確認した。
+
+**経路ごとの Access の効き方**（バイパスの過不足はここでしか分からない）
+
+| リクエスト | 結果 | 意味 |
+|---|---|---|
+| `GET /` | 302 → Access ログイン | ダッシュボードは保護されている |
+| `GET /api/v1/me` | 302 → Access ログイン | 同上 |
+| `GET /api/v1/healthz` | 200 | バイパスが効いている |
+| `POST /api/v1/location`（トークン無し） | 401（Worker 由来） | バイパス通過後に Worker が拒否 |
+| `POST /api/v1/devices/register`（不正コード） | 401 `invalid_invite_code` | 同上 |
+| 偽の `Cf-Access-Jwt-Assertion` を付与 | 302（Worker に届かない） | Access がヘッダを信用させない |
+
+**通しの動作**（招待コード → 端末登録 → 位置送信 → 表示）
+
+| 検証 | 結果 |
+|---|---|
+| 招待コードを `k7qm-4xdf` と小文字＋ハイフンで入力 | 正規化されて成立 |
+| 位置送信 | 202 `{"stored":true}` |
+| 同一測位の再送 | 202 `{"stored":false}`（重複排除が効く） |
+| 使用済み招待コードの再利用 | 401（一回きりが守られている） |
+| 不正な緯度 `999.0` | 400 |
+| ブラウザからのサインインとダッシュボード表示 | One-time PIN で成立 |
+
+### 6.3 まだ確認できていないこと
+
+- **Android 実機からの通し確認が無い。** 上の通しテストは curl による HTTP
+  レベルのもので、アプリの Foreground Service・Room キュー・WorkManager の
+  再送は実機で動かしていない
 - **バッテリー消費の実測が無い。** 設計上は省電力だが、実機での数値は未取得
-- **Cloudflare Access の実設定が無い。** バイパス設定の正しさは未検証
-- ダッシュボードは開発用のダミーデータでしか動かしていない
+- **オフライン再送の実地確認が無い。** 圏外を再現した検証はしていない
+- **Cron Trigger の実動作は未観測。** 登録はされているが、90日経過データの
+  削除が実際に走るのはまだ先
 
 ---
 
@@ -385,19 +412,42 @@ cd android-app && ./gradlew :app:assembleDebug
 サーバーURLは `local.properties`（リポジトリに含まれない）に書く。
 未設定でもビルドは通り、アプリ内の「詳細設定」から実行時に上書きできる。
 
-### 7.2 配備に必要な作業（未実施）
+### 7.2 配備の実施内容（2026-08-24 完了）
 
-1. **D1 を作る** → `npx wrangler d1 create chikaku`
-   出力された `database_id` を `wrangler.jsonc` に書く → `npm run db:migrate`
-2. **Cloudflare Access を設定する**
-   self-hosted アプリケーションを作り、**親端末用の2経路を Bypass にする**。
-   ここを誤ると、付け忘れればアプリが止まり、開けすぎればダッシュボードが無防備になる
-3. **チームドメインと AUD タグ**を `wrangler.jsonc` の `vars` に書く
-4. **家族と子アカウントを登録する** → `wrangler d1 execute`（CLI は Workers に置けない）
-5. **デプロイ** → `npm run deploy`（client のビルドを先に走らせる）
+| | |
+|---|---|
+| 公開 URL | `https://chikaku.<subdomain>.workers.dev` |
+| Cloudflare アカウント | `REPLACE_WITH_CLOUDFLARE_ACCOUNT_ID` |
+| D1 | `chikaku` / `REPLACE_WITH_D1_DATABASE_ID`（APAC） |
+| Zero Trust チームドメイン | `https://REPLACE_WITH_TEAM.cloudflareaccess.com` |
+| ID プロバイダー | One-time PIN のみ（外部 IdP は未設定） |
+| Cron | `0 */6 * * *` |
 
-手順の詳細は `server/README.md`。
-`wrangler.jsonc` には3つのプレースホルダが残っている。
+**独自ドメインは使っていない。** Cloudflare Access は self-hosted
+アプリケーションのドメインとして `workers.dev` のホスト名をそのまま指定でき、
+MVP の段階で独自ドメインを用意する理由が無いため。将来 Custom Domain へ
+移す場合は、Access アプリの `destinations` と Android 側の
+`chikaku.serverBaseUrl` を差し替える。
+
+**Access アプリケーションは 2 つ。** パス単位のアプリがホスト全体のアプリより
+優先される（Cloudflare は「最も具体的なルールが先に適用される」）ため、
+この 2 つで親端末の 3 経路だけが開き、それ以外は保護される。
+
+| アプリ | 対象 | ポリシー |
+|---|---|---|
+| `chikaku-device-api` | `/api/v1/devices/register`, `/api/v1/location`, `/api/v1/healthz` | Bypass（Everyone） |
+| `chikaku` | ホスト全体 | Allow（子アカウントのメールアドレス） |
+
+AUD タグは後者のもの（`f521d219…`）を `wrangler.jsonc` に書く。
+**前者の AUD ではない。** ダッシュボードの JWT は後者のアプリが発行する。
+
+Access アプリの作成には Zero Trust の API 権限が要り、`wrangler login` の
+OAuth トークンには含まれない（`workers` / `d1` などのみ）。
+`Access: Apps and Policies (Edit)` を持つ API トークンを別途発行して
+`POST /accounts/{id}/access/apps` で作成した。**このトークンは作業後に失効させる。**
+
+再デプロイは `npm run deploy` のみでよい（client のビルドを含む）。
+`wrangler.jsonc` にプレースホルダは残っていない。
 
 ---
 
@@ -405,9 +455,11 @@ cd android-app && ./gradlew :app:assembleDebug
 
 ### 配備まわり（次にやること）
 
-- Cloudflare アカウント側の設定（§7.2 の1〜4）
-- Android 実機での疎通確認
+- **Android 実機での疎通確認。** `local.properties` の
+  `chikaku.serverBaseUrl` は配備先に向けてある。招待コードを
+  ダッシュボードで発行して実機をペアリングするところから
 - バッテリー消費の実測
+- **レート制限（下記）を入れるまでは、招待コードを長く生かさない運用にする**
 
 ### 機能
 
