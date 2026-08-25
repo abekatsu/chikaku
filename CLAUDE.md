@@ -6,11 +6,12 @@
 
 **ゴール**: 離れて暮らす高齢の父母の居場所を、子供（複数人を想定）が常時把握できるようにする。
 
-**構成要素（3つ）**:
+**構成要素**:
 
 | コンポーネント | 役割 | 技術 |
 |---|---|---|
 | Androidアプリ（親側） | 位置情報を検知し、変化があったときだけサーバーへ送信 | Kotlin |
+| iPhoneアプリ（親側） | 同上。サーバー契約は Android と同一 | Swift（詳細は ADR-6） |
 | バックエンドサーバー | 位置情報の受信・保存、子供側へのプッシュ通知配信 | Rust |
 | Webダッシュボード（子側） | ブラウザから親の現在地・履歴を確認 | ブラウザ + FCM Web Push |
 
@@ -108,12 +109,15 @@
 ```
 project-root/
 ├── android-app/          # Kotlin, Foreground Service, WorkManager
-├── server/                # Rust (Axum), API + FCM送信
-│   ├── src/
-│   └── Cargo.toml
-├── dashboard/             # Web (フロントエンド, Service Worker)
+├── ios-app/              # Swift, Core Location (SLC + 標準更新), SwiftData
+├── server/               # Rust (Cloudflare Workers), API
+├── client/               # ダッシュボード (Vite + React + TypeScript)
+├── docs/                 # ADR・実装状況・認証設計
 └── CLAUDE.md
 ```
+
+> 実際の構成は上記のとおりで、当初案の `dashboard/` は `client/` になり、
+> サーバーは Axum ではなく Cloudflare Workers 上の Rust になっている（ADR-2/5）。
 
 ---
 

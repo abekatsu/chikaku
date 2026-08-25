@@ -1,0 +1,9 @@
+# 実際の接続先はコミットしない（Chikaku.xcconfig.example が雛形）
+Config/Chikaku.xcconfig
+
+build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.xcworkspace/xcshareddata/IDEWorkspaceChecks.plist
+.DS_Store

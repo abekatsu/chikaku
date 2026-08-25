@@ -1,0 +1,11 @@
+// Config/Chikaku.xcconfig にコピーして使う（コピー先は .gitignore 済み）。
+// Android 版の local.properties + BuildConfig.DEFAULT_SERVER_BASE_URL に相当する。
+//
+// 【注意】xcconfig では "//" 以降が行コメントとして落とされる。
+// "https://" をそのまま書くとスキームだけになって静かに壊れるため、
+// スラッシュを変数経由で挟む（$() は空文字に展開されるだけの区切り）。
+CHIKAKU_SLASHES = $()/$()/
+CHIKAKU_SERVER_BASE_URL = https:$(CHIKAKU_SLASHES)chikaku.example.com
+
+// 開発機のローカルサーバーを見る場合の例:
+// CHIKAKU_SERVER_BASE_URL = http:$(CHIKAKU_SLASHES)192.168.1.10:8787

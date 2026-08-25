@@ -8,7 +8,8 @@
     "deploy": "npm run build && wrangler deploy",
     "test:server": "node server/tests/e2e.mjs",
     "typecheck": "npm --prefix client run typecheck",
-    "db:migrate": "wrangler d1 migrations apply chikaku --remote"
+    "db:migrate": "wrangler d1 migrations apply chikaku --remote",
+    "test:ios": "node ios-app/Tools/contract-check/run.mjs"
   },
   "devDependencies": {
     "jose": "^6.1.0",

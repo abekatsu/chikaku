@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>ja</string>
+	<key>CFBundleDisplayName</key>
+	<string>みまもり</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+
+	<!-- Android の local.properties → BuildConfig.DEFAULT_SERVER_BASE_URL に相当。
+	     Config/Chikaku.xcconfig で差し替える。 -->
+	<key>ChikakuServerBaseURL</key>
+	<string>$(CHIKAKU_SERVER_BASE_URL)</string>
+
+	<!-- 位置情報の用途説明。Android のプロミネントディスクロージャーと同じ趣旨を、
+	     OS のダイアログ上でも読めるようにする（CLAUDE.md §5）。 -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>ご家族に現在地をお知らせするために使います。</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>アプリを閉じている間もご家族に現在地をお知らせするため、常に位置情報を使います。位置が大きく動いたときだけ送信します。</string>
+
+	<!-- location: 常時測位（Android の Foreground Service 相当）
+	     processing / fetch: 圏外復帰後の再送とヘルスチェック（WorkManager 相当） -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>location</string>
+		<string>fetch</string>
+		<string>processing</string>
+	</array>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.damburisoft.chikaku.watch.upload</string>
+		<string>com.damburisoft.chikaku.watch.heartbeat</string>
+	</array>
+
+	<!-- 遠隔のサーバーには TLS を強制したまま、開発機のローカルサーバーだけ許す。
+	     NSAllowsArbitraryLoads は使わない（CLAUDE.md §5）。 -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+
+	<key>UILaunchScreen</key>
+	<dict/>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+	</array>
+	<key>UIUserInterfaceStyle</key>
+	<string>Light</string>
+</dict>
+</plist>
