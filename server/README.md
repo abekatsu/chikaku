@@ -82,7 +82,9 @@ npx wrangler d1 execute chikaku --remote --command "
 "
 ```
 
-きょうだいを足す場合は 2 番目の INSERT を繰り返す。
+**きょうだいを後から足す場合は、この INSERT だけでは足りない。**
+Access のポリシーにも同じメールアドレスを載せる必要がある。
+手順は [運用 — 子アカウントを追加する](#子アカウントを追加する) を見ること。
 
 ### 4. デプロイ
 
@@ -94,6 +96,91 @@ npm run deploy
 `wrangler.jsonc` の `assets.directory` が `client/dist` を指しているため、
 **client のビルドが先**。この順序を守らないと古い（または存在しない）
 静的ファイルがデプロイされる。
+
+## 運用
+
+配備後に繰り返す作業。初回構築の手順は「セットアップ」を参照。
+
+### 子アカウントを追加する
+
+きょうだいが増えたときなど、ダッシュボードを見られる人を足す手順。
+
+**登録先は 2 箇所ある。片方だけでは入れない。**
+
+| # | 場所 | 役割 | 欠けるとどうなるか |
+|---|---|---|---|
+| 1 | Cloudflare Access のポリシー | サインインを通す | サインイン画面から先に進めない（302 のまま） |
+| 2 | D1 の `children_accounts` | どの家族を見られるかを決める | サインインは通るが全 API が **403** |
+
+二重にしているのは意図的で、Access の許可を広げすぎた場合に D1 側が
+歯止めになる（ADR-3、[`docs/authentication.md`](../docs/authentication.md) §3）。
+
+**メールアドレスは 2 箇所で完全に一致させること。** 大文字小文字は
+`children_accounts` 側が `lower()` で吸収するが、別名やエイリアスは別人として扱われる。
+
+#### 1. Access のポリシーに足す
+
+1. [Zero Trust ダッシュボード](https://one.dash.cloudflare.com/) →
+   **Access** → **Applications**
+2. **`chikaku`** を選ぶ（`chikaku-device-api` ではない。あちらは親端末用の
+   バイパスで、人を通すためのものではない）
+3. **Policies** → `allow-children` を編集
+4. Include に `Emails` セレクタで追加する
+5. 保存
+
+API で行う場合は `Access: Apps and Policies (Edit)` 権限の API トークンが要る。
+`wrangler login` の OAuth トークンにこの権限は含まれない。
+
+#### 2. D1 に足す
+
+```sh
+npx wrangler d1 execute chikaku --remote --command "
+  INSERT INTO children_accounts (id, family_id, email, display_name, created_at)
+  SELECT lower(hex(randomblob(16))), id, 'sister@example.com', '長女', unixepoch() * 1000
+  FROM families WHERE name = '我が家';
+"
+```
+
+`display_name` はダッシュボードに出る呼び名。`family_id` を直接書かず
+`families` から引いているのは、家族が 1 つしかない前提を持ち込まないため。
+
+#### 3. 確認する
+
+```sh
+npx wrangler d1 execute chikaku --remote --command "
+  SELECT c.email, c.display_name, f.name
+  FROM children_accounts c JOIN families f ON f.id = c.family_id;
+"
+```
+
+本人にダッシュボードの URL を渡す。**先方でのアカウント作成は要らない。**
+メールアドレスに届く PIN を入力するだけでサインインできる（One-time PIN）。
+
+#### 権限の区別は無い
+
+追加した人は既存の子アカウントと**完全に同等**になる。位置の閲覧だけでなく、
+招待コードの発行と端末の無効化もできる。「見るだけ」の権限は実装していない
+（[`docs/implementation-status.md`](../docs/implementation-status.md) §8）。
+
+### 子アカウントを削除する
+
+追加と同じく 2 箇所から消す。**D1 だけ消しても Access のセッションが
+生きている間はサインイン状態が残る**ため、Access のポリシーを先に直す。
+
+```sh
+npx wrangler d1 execute chikaku --remote --command "
+  DELETE FROM children_accounts WHERE lower(email) = 'sister@example.com';
+"
+```
+
+発行済みの招待コードは `created_by` が `ON DELETE SET NULL` なので残る。
+使われたくない場合は併せて消す。
+
+```sh
+npx wrangler d1 execute chikaku --remote --command "
+  DELETE FROM invite_codes WHERE used_at IS NULL;
+"
+```
 
 ## API
 
