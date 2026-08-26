@@ -15,6 +15,29 @@ val localProps = Properties().apply {
 }
 val defaultServerUrl: String = localProps.getProperty("chikaku.serverBaseUrl") ?: "https://chikaku.example.com/"
 
+// リリース署名も同じく local.properties から読む。鍵そのものはリポジトリの外に置く。
+//
+// **4つすべてが揃っているときだけ署名する。** 欠けていれば未署名のまま出す。
+// 署名鍵を持たない環境でも release ビルドの検証（R8・lintVitalRelease）が
+// できるようにするため、ここで失敗させない。実機に入れる APK かどうかは
+// ビルド後に apksigner で確かめる。
+val releaseKeystore = localProps.getProperty("chikaku.keystoreFile")?.let(rootProject::file)
+val releaseKeystorePassword: String? = localProps.getProperty("chikaku.keystorePassword")
+val releaseKeyAlias: String? = localProps.getProperty("chikaku.keyAlias")
+val releaseKeyPassword: String? = localProps.getProperty("chikaku.keyPassword")
+
+val canSignRelease = releaseKeystore?.exists() == true &&
+    !releaseKeystorePassword.isNullOrEmpty() &&
+    !releaseKeyAlias.isNullOrEmpty() &&
+    !releaseKeyPassword.isNullOrEmpty()
+
+if (!canSignRelease) {
+    logger.lifecycle(
+        "chikaku: 署名鍵が未設定のため release ビルドは未署名になります " +
+            "（local.properties の chikaku.keystoreFile 他を参照）",
+    )
+}
+
 android {
     namespace = "com.damburisoft.chikaku.watch"
     compileSdk = 37
@@ -29,6 +52,23 @@ android {
         buildConfigField("String", "DEFAULT_SERVER_BASE_URL", "\"$defaultServerUrl\"")
     }
 
+    signingConfigs {
+        if (canSignRelease) {
+            create("release") {
+                storeFile = releaseKeystore
+                storePassword = releaseKeystorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+                // Play ストアではなく APK を直接配る前提なので、
+                // 端末が検証に使う署名方式を明示しておく。
+                // v1 は minSdk 26 では不要（v2 以降のみを使う）。
+                enableV1Signing = false
+                enableV2Signing = true
+                enableV3Signing = true
+            }
+        }
+    }
+
     buildTypes {
         debug {
             isMinifyEnabled = false
@@ -37,6 +77,7 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            signingConfig = signingConfigs.findByName("release")
         }
     }
 

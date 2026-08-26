@@ -8,3 +8,20 @@ sdk.dir=/Users/YOUR_NAME/Library/Android/sdk
 # 未設定の場合は BuildConfig.DEFAULT_SERVER_BASE_URL のプレースホルダが使われ、
 # アプリ内の「詳細設定」から実行時に上書きできる。
 chikaku.serverBaseUrl=https://chikaku.example.com/
+
+# リリース署名。4つすべてが揃っているときだけ署名され、
+# 欠けていれば未署名の APK が出る（R8 と lint の検証はどちらでも回る）。
+#
+# 鍵はリポジトリの外に置くこと。誤ってコミットする経路を作らない。
+#   keytool -genkeypair -keystore ~/.keystores/chikaku/chikaku-release.jks \
+#     -storetype PKCS12 -alias chikaku -keyalg RSA -keysize 2048 \
+#     -validity 10000 -dname "CN=Chikaku Mimamori, O=damburisoft, C=JP"
+#
+# **この鍵を失うとアプリを更新できなくなる。** 署名が変わった APK は
+# 同じ applicationId の既存インストールを上書きできず、
+# 親の端末で一度アンインストールしてもらう必要がある（ペアリングもやり直しになる）。
+# 鍵ファイルとパスワードは別々に、かつ確実に控えておくこと。
+chikaku.keystoreFile=/Users/YOUR_NAME/.keystores/chikaku/chikaku-release.jks
+chikaku.keystorePassword=YOUR_KEYSTORE_PASSWORD
+chikaku.keyAlias=chikaku
+chikaku.keyPassword=YOUR_KEY_PASSWORD

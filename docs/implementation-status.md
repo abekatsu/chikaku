@@ -587,8 +587,8 @@ D1 に実際に行が入るところまで確認している（登録1件・位�
 **実機からの通し**（2026-08-25、AQUOS Sense 8 / SHARP SH-54D、debug ビルド）
 
 APK にはビルド時に `local.properties` の `chikaku.serverBaseUrl` が
-埋め込まれる。release には署名設定が無く未署名 APK は実機に入らないため、
-確認は debug ビルドで行った。
+埋め込まれる。確認時点では署名設定が無く未署名 APK は実機に入らなかったため、
+debug ビルドで行った（署名設定はその後 §8.3 で作成した）。
 
 | | 1件目 | 2件目 |
 |---|---|---|
@@ -612,8 +612,9 @@ APK にはビルド時に `local.properties` の `chikaku.serverBaseUrl` が
   アプリ側の間引き（§3.2）が実際に効くところは見ていない
 - **オフライン再送の実地確認が無い。** 圏外を再現した検証はしていない
 - **バッテリー消費の実測が無い。** 設計上は省電力だが、実機での数値は未取得
-- **release ビルドが無い。** 署名設定が未作成。debug ビルドは HTTP の
-  本文（位置情報を含む）をログに出すため、常用する端末には向かない
+- **release ビルドを実機で動かしていない。** 署名設定は作成済みで署名付き APK は
+  出るようになった（§8.3）が、まだ端末に入れていない。R8 で難読化・削減された
+  コードでの動作確認はこれから
 - **Cron Trigger の実動作は未観測。** 登録はされているが、90日経過データの
   削除が実際に走るのはまだ先
 - **iOS は実機で一度も動かしていない。** バックグラウンド測位・SLC による
@@ -659,6 +660,7 @@ cd android-app && ./gradlew :app:assembleDebug
 
 サーバーURLは `local.properties`（リポジトリに含まれない）に書く。
 未設定でもビルドは通り、アプリ内の「詳細設定」から実行時に上書きできる。
+リリース署名も同じファイルから読む（§8.3）。
 
 **iPhoneアプリ**
 
@@ -717,6 +719,46 @@ OAuth トークンには含まれない（`workers` / `d1` などのみ）。
 
 ---
 
+### 8.3 リリース署名（2026-08-26 作成）
+
+親の端末には release ビルドを入れる。debug ビルドは HTTP の本文（位置情報を含む）を
+ログに出し、`run-as` で端末内のデータを読めてしまうため、常用する端末には向かない。
+
+署名の設定は `local.properties` から読む。**4つすべてが揃っているときだけ署名し、
+欠けていれば未署名のまま出す。** 署名鍵を持たない環境でも R8 と lint の検証を
+回せるようにするためで、ビルドをそこで失敗させない。
+
+```properties
+chikaku.keystoreFile=/Users/YOUR_NAME/.keystores/chikaku/chikaku-release.jks
+chikaku.keystorePassword=...
+chikaku.keyAlias=chikaku
+chikaku.keyPassword=...
+```
+
+**鍵はリポジトリの外に置く。** `.gitignore` は `*.jks` を除外しているが、
+そもそも作業ツリーに置かなければ誤ってコミットする経路が生まれない。
+
+| | |
+|---|---|
+| 保存先 | `~/.keystores/chikaku/chikaku-release.jks`（`chmod 600`） |
+| 種別 | PKCS12 / RSA 2048 / 10000日 |
+| 別名 | `chikaku` |
+| 証明書 SHA-256 | `452c2d07d813dc84171d2dd9080140821a4fcd021fc921dff14ed056a0f3dd3c` |
+
+署名方式は **v2 + v3 のみ**で v1 は無効にした。minSdk 26 では v1（JAR 署名）は
+不要で、APK に余分な `META-INF` を積むだけになるため。
+
+```sh
+./gradlew :app:assembleRelease
+apksigner verify --print-certs app/build/outputs/apk/release/app-release.apk
+```
+
+**この鍵を失うとアプリを更新できなくなる。** 署名が変わった APK は同じ
+`applicationId` の既存インストールを上書きできず、親の端末で一度アンインストール
+してもらうことになる。ペアリングもやり直しになる。鍵ファイルとパスワードは
+別々に、確実に控えておくこと。
+
+---
 ## 9. 残課題
 
 ### 配備まわり（次にやること）
