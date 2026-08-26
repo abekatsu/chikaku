@@ -5,6 +5,7 @@ use crate::auth::DeviceAuth;
 use crate::clock;
 use crate::db;
 use crate::error::{AppError, AppResult};
+use crate::routes::DeviceHealth;
 
 /// 端末の時計が進んでいても受け入れる上限。
 /// これを超えるものは明らかな異常として弾く。
@@ -20,6 +21,9 @@ pub struct LocationRequest {
     /// ISO-8601 (UTC)
     pub timestamp: String,
     pub battery_level: i64,
+    /// 端末設定の健康状態 (Issue #4)。この項目より前のアプリからは送られてこない。
+    #[serde(default)]
+    pub health: Option<DeviceHealth>,
 }
 
 #[derive(Debug, Serialize)]
@@ -72,6 +76,29 @@ pub async fn create(
         ));
     }
 
+    // 健康状態は位置ではなく端末の情報なので、履歴には残さず最新だけを上書きする。
+    // 端末は送信時点の値を送ってくるので、圏外で溜まっていた古いキューを
+    // 消化している最中でも、ここに入るのは「いまの設定」になる。
+    let touch_device = match req.health {
+        Some(health) => database
+            .prepare(
+                "UPDATE parent_devices SET last_seen_at = ?1, health_reported_at = ?1, \
+                 battery_unrestricted = ?3, notifications_enabled = ?4, background_location = ?5 \
+                 WHERE id = ?2",
+            )
+            .bind(&[
+                db::num(now),
+                db::text(&auth.device_id),
+                db::flag(health.battery_unrestricted),
+                db::flag(health.notifications_enabled),
+                db::flag(health.background_location),
+            ])?,
+        // 報告のないアプリの列を触らない。0 で埋めると「未報告」が「問題あり」に化ける。
+        None => database
+            .prepare("UPDATE parent_devices SET last_seen_at = ?1 WHERE id = ?2")
+            .bind(&[db::num(now), db::text(&auth.device_id)])?,
+    };
+
     // 応答が失われたあとの再送で重複しないよう、
     // (device_id, recorded_at) の一意制約に任せて黙って捨てる。
     let counts = db::batch(
@@ -93,9 +120,7 @@ pub async fn create(
                     db::num(now),
                     db::num(req.battery_level),
                 ])?,
-            database
-                .prepare("UPDATE parent_devices SET last_seen_at = ?1 WHERE id = ?2")
-                .bind(&[db::num(now), db::text(&auth.device_id)])?,
+            touch_device,
         ],
     )
     .await?;

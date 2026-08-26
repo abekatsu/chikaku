@@ -28,6 +28,12 @@ data class LocationPayload(
     /** ISO-8601 (UTC)。サーバー側の時刻表現に依存しないよう文字列で送る。 */
     val timestamp: String,
     @SerialName("battery_level") val batteryLevel: Int,
+    /**
+     * 端末設定の健康状態 (Issue #4)。位置ではなく端末に紐づく情報なので、
+     * サーバーは最新のものだけを parent_devices に上書きする。
+     * 古いアプリからは送られてこないため、サーバー側では省略可能。
+     */
+    val health: DeviceHealth? = null,
 )
 
 @Serializable

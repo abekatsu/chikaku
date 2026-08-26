@@ -22,12 +22,22 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.damburisoft.chikaku.watch.R
+import com.damburisoft.chikaku.watch.data.DeviceHealth
 import com.damburisoft.chikaku.watch.data.Settings
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 private val timeFormat = DateTimeFormatter.ofPattern("M月d日 HH:mm")
+
+/** 見守りが始まったあとで壊れうる設定。直し方が違うので個別に扱う。 */
+enum class HealthIssue { BatteryRestricted, NotificationsDisabled, BackgroundLocationMissing }
+
+private fun DeviceHealth.issues(): List<HealthIssue> = buildList {
+    if (!backgroundLocation) add(HealthIssue.BackgroundLocationMissing)
+    if (!batteryUnrestricted) add(HealthIssue.BatteryRestricted)
+    if (!notificationsEnabled) add(HealthIssue.NotificationsDisabled)
+}
 
 /**
  * 定常状態の画面。親が見るのはほぼこの画面だけなので、
@@ -37,10 +47,12 @@ private val timeFormat = DateTimeFormatter.ofPattern("M月d日 HH:mm")
 fun StatusScreen(
     settings: Settings,
     pendingCount: Int,
+    health: DeviceHealth,
     onSendNow: () -> Unit,
     onStart: () -> Unit,
     onStop: () -> Unit,
     onUnpair: () -> Unit,
+    onFixHealth: (HealthIssue) -> Unit,
 ) {
     var confirmStop by rememberSaveable { mutableStateOf(false) }
     var confirmUnpair by rememberSaveable { mutableStateOf(false) }
@@ -86,6 +98,12 @@ fun StatusScreen(
                     StatusRow(label = stringResource(R.string.status_device_name), value = it)
                 }
             }
+        }
+
+        // 権限画面を通り過ぎたあとに設定が変わっても、ここに出ないと誰も気づけない。
+        // 見守りが止まっているときは「開始する」ことが先なので出さない。
+        if (running) {
+            HealthWarnings(issues = health.issues(), onFix = onFixHealth)
         }
 
         Spacer(Modifier.height(8.dp))
@@ -134,6 +152,48 @@ fun StatusScreen(
         )
     }
 }
+
+@Composable
+private fun HealthWarnings(issues: List<HealthIssue>, onFix: (HealthIssue) -> Unit) {
+    if (issues.isEmpty()) return
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.errorContainer,
+        ),
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.status_health_title),
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onErrorContainer,
+            )
+            issues.forEach { issue ->
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = stringResource(issue.bodyRes),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                    )
+                    SecondaryButton(
+                        text = stringResource(R.string.status_health_fix),
+                        onClick = { onFix(issue) },
+                    )
+                }
+            }
+        }
+    }
+}
+
+private val HealthIssue.bodyRes: Int
+    get() = when (this) {
+        HealthIssue.BackgroundLocationMissing -> R.string.status_health_background_location
+        HealthIssue.BatteryRestricted -> R.string.status_health_battery
+        HealthIssue.NotificationsDisabled -> R.string.status_health_notifications
+    }
 
 @Composable
 private fun StatusRow(label: String, value: String) {

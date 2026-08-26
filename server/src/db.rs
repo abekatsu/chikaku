@@ -15,6 +15,11 @@ pub fn num(v: i64) -> JsValue {
     JsValue::from_f64(v as f64)
 }
 
+/// 真偽値。SQLite に BOOLEAN は無いので INTEGER 0/1 として入れる。
+pub fn flag(v: bool) -> JsValue {
+    num(i64::from(v))
+}
+
 pub fn real(v: f64) -> JsValue {
     JsValue::from_f64(v)
 }

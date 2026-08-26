@@ -16,16 +16,23 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.damburisoft.chikaku.watch.R
+import com.damburisoft.chikaku.watch.data.DeviceHealth
 
 /**
- * 権限の状態。Android 10 未満・13 未満では該当しないものが常に true になる。
+ * 権限の状態。Android 10 未満では背景位置情報が常に true になる。
+ *
+ * 位置情報の前景権限を除く 3 つは、見守り開始後も失われうるものと同じなので
+ * [DeviceHealth] をそのまま持つ。権限画面と状態画面で判定がずれると、
+ * 「許可済み」と表示しながら実際には通知が出ない、という食い違いが起きる。
  */
 data class PermissionStatus(
     val foregroundLocation: Boolean,
-    val backgroundLocation: Boolean,
-    val notifications: Boolean,
-    val batteryUnrestricted: Boolean,
+    val health: DeviceHealth,
 ) {
+    val backgroundLocation: Boolean get() = health.backgroundLocation
+    val notifications: Boolean get() = health.notificationsEnabled
+    val batteryUnrestricted: Boolean get() = health.batteryUnrestricted
+
     /** 見守りを始めるのに最低限必要なもの。 */
     val canStartTracking: Boolean get() = foregroundLocation && backgroundLocation
 }

@@ -5,6 +5,7 @@ use crate::auth::ChildAuth;
 use crate::clock::{self, Millis};
 use crate::db;
 use crate::error::{AppError, AppResult};
+use crate::routes::DeviceHealth;
 use crate::token;
 
 const DEFAULT_HISTORY_WINDOW_MS: Millis = 24 * 60 * 60 * 1_000;
@@ -28,6 +29,17 @@ pub struct DeviceLatest {
     pub last_seen_at: Option<String>,
     /// 一度も送信していない端末では null。
     pub latest: Option<Fix>,
+    /// 端末設定の健康状態 (Issue #4)。報告に対応する前のアプリでは null。
+    /// **null は「問題なし」ではなく「分からない」。** 画面でも区別して出す。
+    pub health: Option<DeviceHealthReport>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct DeviceHealthReport {
+    #[serde(flatten)]
+    pub health: DeviceHealth,
+    /// この状態を受け取った時刻。古ければ端末が長く沈黙していることを意味する。
+    pub reported_at: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -54,6 +66,10 @@ struct LatestRow {
     recorded_at: Option<Millis>,
     received_at: Option<Millis>,
     battery_level: Option<i64>,
+    battery_unrestricted: Option<i64>,
+    notifications_enabled: Option<i64>,
+    background_location: Option<i64>,
+    health_reported_at: Option<Millis>,
 }
 
 /// `GET /api/v1/families/{family_id}/latest`
@@ -67,6 +83,8 @@ pub async fn latest(
     let rows: Vec<LatestRow> = db::all(
         database,
         "SELECT d.id, d.device_name, d.device_model, d.last_seen_at, \
+                d.battery_unrestricted, d.notifications_enabled, \
+                d.background_location, d.health_reported_at, \
                 e.lat, e.lng, e.accuracy, e.recorded_at, e.received_at, e.battery_level \
          FROM parent_devices d \
          LEFT JOIN location_events e ON e.id = ( \
@@ -96,6 +114,26 @@ pub async fn latest(
                         recorded_at: clock::to_rfc3339(recorded),
                         received_at: clock::to_rfc3339(received),
                         battery_level: r.battery_level.unwrap_or(-1),
+                    })
+                }
+                _ => None,
+            },
+            // 4 列は必ず揃って書かれるが、片方だけ NULL の行を「問題あり」と
+            // 誤って読まないよう、全部揃っているときだけ報告として扱う。
+            health: match (
+                r.health_reported_at,
+                r.battery_unrestricted,
+                r.notifications_enabled,
+                r.background_location,
+            ) {
+                (Some(at), Some(battery), Some(notifications), Some(background)) => {
+                    Some(DeviceHealthReport {
+                        health: DeviceHealth {
+                            battery_unrestricted: battery != 0,
+                            notifications_enabled: notifications != 0,
+                            background_location: background != 0,
+                        },
+                        reported_at: clock::to_rfc3339(at),
                     })
                 }
                 _ => None,

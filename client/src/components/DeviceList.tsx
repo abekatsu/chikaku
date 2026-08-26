@@ -1,4 +1,4 @@
-import type { DeviceLatest } from "../api/types";
+import type { DeviceHealth, DeviceLatest } from "../api/types";
 import {
   accuracyLabel,
   batteryLabel,
@@ -108,6 +108,12 @@ function DeviceCard({ device, selected, onSelect, onFocus, onRevoke }: DeviceCar
         )}
       </button>
 
+      {/*
+        親の端末設定が壊れていることは、親のスマホの画面にしか出ない。
+        本人が気づかなければ見守りは静かに劣化し続けるので、子側にも出す（Issue #4）。
+      */}
+      {device.health && <HealthNotice health={device.health} />}
+
       <div className="device__actions">
         <button className="btn btn--quiet" onClick={onFocus} disabled={!fix}>
           地図で見る
@@ -118,6 +124,52 @@ function DeviceCard({ device, selected, onSelect, onFocus, onRevoke }: DeviceCar
       </div>
     </li>
   );
+}
+
+function HealthNotice({ health }: { health: DeviceHealth }) {
+  const problems = healthProblems(health);
+  if (problems.length === 0) return null;
+
+  return (
+    <div className="device__health">
+      <p className="device__health-title">この端末は設定に問題があります</p>
+      <ul className="device__health-list">
+        {problems.map(([key, label]) => (
+          <li key={key}>{label}</li>
+        ))}
+      </ul>
+      <p className="device__health-hint">
+        親御さんのスマホで「みまもり」アプリを開くと、直す手順が出ます。
+      </p>
+    </div>
+  );
+}
+
+/**
+ * 影響の大きい順に並べる。位置が届かなくなるものが先で、
+ * 気づけなくなるだけのものが後。
+ */
+function healthProblems(health: DeviceHealth): [string, string][] {
+  const problems: [string, string][] = [];
+  if (!health.background_location) {
+    problems.push([
+      "background_location",
+      "位置情報が「常に許可」になっていません。画面が消えている間、居場所が更新されません。",
+    ]);
+  }
+  if (!health.battery_unrestricted) {
+    problems.push([
+      "battery",
+      "電池の最適化が外れていません。位置が数十分遅れて届くことがあります。",
+    ]);
+  }
+  if (!health.notifications_enabled) {
+    problems.push([
+      "notifications",
+      "通知が表示できません。親御さん自身が見守りの状態を確認できません。",
+    ]);
+  }
+  return problems;
 }
 
 /** 5 分以上の開きがあれば「遅れて届いた」とみなす。 */

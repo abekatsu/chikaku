@@ -9,6 +9,7 @@
     <string name="notification_text_idle">まだ送信していません</string>
     <string name="notification_text_sent">最終送信: %1$s</string>
     <string name="notification_text_queued">未送信 %1$d 件（電波が戻り次第送ります）</string>
+    <string name="notification_text_uploading">送信しています</string>
 
     <!-- 説明画面（プロミネントディスクロージャー） -->
     <string name="disclosure_title">このアプリについて</string>
@@ -67,5 +68,12 @@
     <string name="status_stop_confirm_ok">停止する</string>
     <string name="common_cancel">キャンセル</string>
     <string name="status_unpair">家族との接続を解除する</string>
+    <!-- 状態画面の警告（見守り開始後に設定が変わった場合） -->
+    <string name="status_health_title">端末の設定をご確認ください</string>
+    <string name="status_health_fix">設定を開く</string>
+    <string name="status_health_background_location">位置情報が「常に許可」になっていません。画面を消している間、居場所をお知らせできません。</string>
+    <string name="status_health_battery">電池の最適化が外れていません。お知らせが数十分遅れて届くことがあります。</string>
+    <string name="status_health_notifications">通知が表示できません。見守りが動いているかどうかを画面で確認できなくなります。</string>
+
     <string name="status_unpair_confirm_body">接続を解除すると、保存されている端末情報と未送信の位置情報が削除されます。再開するには招待コードの入力が必要です。</string>
 </resources>

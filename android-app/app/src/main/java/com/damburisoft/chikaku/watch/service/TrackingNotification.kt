@@ -22,6 +22,13 @@ object TrackingNotification {
     const val CHANNEL_ID = "tracking"
     const val NOTIFICATION_ID = 1001
 
+    /**
+     * 送信中に一瞬だけ出る通知。expedited work が Foreground Service として
+     * 動く API 31 未満でのみ使われる (`UploadWorker.getForegroundInfo`)。
+     * 常駐通知と同じ ID を使うと、送信が終わった時点で常駐通知ごと消える。
+     */
+    const val UPLOAD_NOTIFICATION_ID = 1002
+
     private val timeFormat = DateTimeFormatter.ofPattern("M月d日 HH:mm")
 
     fun createChannel(context: Context) {
@@ -63,6 +70,17 @@ object TrackingNotification {
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
     }
+
+    fun buildUploading(context: Context): Notification =
+        NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle(context.getString(R.string.notification_title))
+            .setContentText(context.getString(R.string.notification_text_uploading))
+            .setSilent(true)
+            .setShowWhen(false)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .build()
 
     private fun formatTime(epochMillis: Long): String =
         timeFormat.format(Instant.ofEpochMilli(epochMillis).atZone(ZoneId.systemDefault()))

@@ -24,6 +24,21 @@ export interface Fix {
   battery_level: number;
 }
 
+/**
+ * 親端末の設定のうち、見守りの成否を左右するもの（Issue #4）。
+ * 端末が位置情報と一緒に報告する。
+ */
+export interface DeviceHealth {
+  /** 電池の最適化から除外されているか。false だと位置が数十分遅れて届く。 */
+  battery_unrestricted: boolean;
+  /** 常駐通知を表示できるか。false だと親が動作を確認できない。 */
+  notifications_enabled: boolean;
+  /** 位置情報が「常に許可」か。false だと画面を消した間の測位が止まる。 */
+  background_location: boolean;
+  /** この状態を受け取った時刻 (RFC 3339) */
+  reported_at: string;
+}
+
 export interface DeviceLatest {
   device_id: string;
   device_name: string;
@@ -32,6 +47,11 @@ export interface DeviceLatest {
   last_seen_at: string | null;
   /** 一度も送信していない端末では null */
   latest: Fix | null;
+  /**
+   * 端末設定の健康状態。報告に対応する前のアプリでは null。
+   * **null は「問題なし」ではなく「分からない」。** 警告を出してはいけない。
+   */
+  health: DeviceHealth | null;
 }
 
 export interface LatestResponse {

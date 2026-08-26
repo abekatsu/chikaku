@@ -50,7 +50,9 @@
 ### 2.4 サーバー送信
 - 位置が閾値を超えて変化した場合のみ HTTPS POST（`/api/v1/location`）
 - 圏外・オフライン時はローカルDB（Room）にキューイングし、WorkManagerで再送
-- 送信ペイロード例: `{device_id, lat, lng, accuracy, timestamp, battery_level}`
+- 送信ペイロード例: `{device_id, lat, lng, accuracy, timestamp, battery_level, health}`
+  - `health` は端末設定の健康状態 `{battery_unrestricted, notifications_enabled, background_location}`。
+    測位時ではなく**送信時**の値を送る。省略可（iOS 版は送らない）
 
 ---
 

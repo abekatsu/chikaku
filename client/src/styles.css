@@ -653,3 +653,32 @@ h2 {
   font: inherit;
   background: var(--surface-alt);
 }
+
+/* ------------------------------------------------- 端末設定の警告 (Issue #4) */
+
+.device__health {
+  margin: 0 14px 12px;
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--aging) 14%, var(--surface));
+  border-left: 4px solid var(--aging);
+  font-size: 13px;
+}
+
+.device__health-title {
+  margin: 0;
+  font-weight: 700;
+}
+
+.device__health-list {
+  margin: 6px 0 0;
+  padding-left: 1.2em;
+}
+
+.device__health-list li + li {
+  margin-top: 4px;
+}
+
+.device__health-hint {
+  margin: 8px 0 0;
+  color: var(--text-muted);
+}

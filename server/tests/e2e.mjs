@@ -290,6 +290,63 @@ test("電池残量 -1 は受け付ける", async () => {
   assertEqual(res.status, 202, JSON.stringify(res.body));
 });
 
+test("端末設定の健康状態が latest に出る", async () => {
+  const family = await seedFamily("health@example.com");
+  const { deviceId, deviceToken } = await pairDevice(family.familyId, family.jwt);
+
+  const post = await api("POST", "/location", {
+    bearer: deviceToken,
+    body: fix(deviceId, iso(Date.now()), {
+      health: {
+        battery_unrestricted: false,
+        notifications_enabled: true,
+        background_location: false,
+      },
+    }),
+  });
+  assertEqual(post.status, 202, JSON.stringify(post.body));
+
+  const latest = await api("GET", `/families/${family.familyId}/latest`, { jwt: family.jwt });
+  const health = latest.body.devices[0].health;
+  assertEqual(health.battery_unrestricted, false);
+  assertEqual(health.notifications_enabled, true);
+  assertEqual(health.background_location, false);
+  assert(typeof health.reported_at === "string", "reported_at が無い");
+});
+
+test("健康状態を報告しない端末では null になる（false ではない）", async () => {
+  const family = await seedFamily("nohealth@example.com");
+  const { deviceId, deviceToken } = await pairDevice(family.familyId, family.jwt);
+
+  // health を持たない古いアプリからの送信。
+  await api("POST", "/location", { bearer: deviceToken, body: fix(deviceId, iso(Date.now())) });
+
+  const latest = await api("GET", `/families/${family.familyId}/latest`, { jwt: family.jwt });
+  // ここが false になると、報告できていないだけの端末に警告が出てしまう。
+  assertEqual(latest.body.devices[0].health, null, "未報告が「問題あり」に化けている");
+});
+
+test("健康状態のない送信は、報告済みの状態を消さない", async () => {
+  const family = await seedFamily("keephealth@example.com");
+  const { deviceId, deviceToken } = await pairDevice(family.familyId, family.jwt);
+  const now = Date.now();
+
+  await api("POST", "/location", {
+    bearer: deviceToken,
+    body: fix(deviceId, iso(now), {
+      health: {
+        battery_unrestricted: true,
+        notifications_enabled: true,
+        background_location: true,
+      },
+    }),
+  });
+  await api("POST", "/location", { bearer: deviceToken, body: fix(deviceId, iso(now + 1000)) });
+
+  const latest = await api("GET", `/families/${family.familyId}/latest`, { jwt: family.jwt });
+  assertEqual(latest.body.devices[0].health.battery_unrestricted, true, "直前の報告が消えている");
+});
+
 test("無効化した端末は送信できなくなる", async () => {
   const family = await seedFamily("revoke@example.com");
   const { deviceId, deviceToken } = await pairDevice(family.familyId, family.jwt);

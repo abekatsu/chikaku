@@ -6,7 +6,6 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.os.PowerManager
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -24,7 +23,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.damburisoft.chikaku.watch.data.DeviceHealth
 import com.damburisoft.chikaku.watch.ui.DisclosureScreen
+import com.damburisoft.chikaku.watch.ui.HealthIssue
 import com.damburisoft.chikaku.watch.ui.MainViewModel
 import com.damburisoft.chikaku.watch.ui.PairingScreen
 import com.damburisoft.chikaku.watch.ui.PermissionScreen
@@ -34,7 +35,16 @@ import com.damburisoft.chikaku.watch.ui.theme.ChikakuTheme
 
 class MainActivity : ComponentActivity() {
 
-    private var permissionStatus by mutableStateOf(PermissionStatus(false, false, false, false))
+    private var permissionStatus by mutableStateOf(
+        PermissionStatus(
+            foregroundLocation = false,
+            health = DeviceHealth(
+                batteryUnrestricted = false,
+                notificationsEnabled = false,
+                backgroundLocation = false,
+            ),
+        )
+    )
     private var deniedPermanently by mutableStateOf(false)
 
     private val foregroundLocationLauncher = registerForActivityResult(
@@ -99,10 +109,12 @@ class MainActivity : ComponentActivity() {
                         else -> StatusScreen(
                             settings = settings,
                             pendingCount = state.pendingCount,
+                            health = permissionStatus.health,
                             onSendNow = vm::sendNow,
                             onStart = { vm.startTracking() },
                             onStop = vm::stopTracking,
                             onUnpair = vm::unpair,
+                            onFixHealth = ::fixHealthIssue,
                         )
                     }
                 }
@@ -120,12 +132,17 @@ class MainActivity : ComponentActivity() {
         permissionStatus = PermissionStatus(
             foregroundLocation = hasPermission(Manifest.permission.ACCESS_FINE_LOCATION) ||
                 hasPermission(Manifest.permission.ACCESS_COARSE_LOCATION),
-            backgroundLocation = Build.VERSION.SDK_INT < Build.VERSION_CODES.Q ||
-                hasPermission(Manifest.permission.ACCESS_BACKGROUND_LOCATION),
-            notifications = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
-                hasPermission(Manifest.permission.POST_NOTIFICATIONS),
-            batteryUnrestricted = isIgnoringBatteryOptimizations(),
+            health = DeviceHealth.read(this),
         )
+    }
+
+    /** 状態画面の警告から呼ばれる。 */
+    private fun fixHealthIssue(issue: HealthIssue) = when (issue) {
+        HealthIssue.BackgroundLocationMissing -> requestBackgroundLocation()
+        HealthIssue.BatteryRestricted -> requestBatteryExemption()
+        // ここに来るのは権限画面を通り過ぎたあと。権限ダイアログは
+        // 二度断られていると無反応で終わるので、確実に直せる設定画面へ送る。
+        HealthIssue.NotificationsDisabled -> openNotificationSettings()
     }
 
     private fun hasPermission(permission: String): Boolean =
@@ -153,17 +170,34 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * 権限が無いうちはダイアログで足りるが、一度許可したあとに設定画面や
+     * チャンネル単位で切られた場合はダイアログが出ないまま何も起きない。
+     * その場合は通知設定画面へ送るしかない。
+     */
     private fun requestNotificationPermission() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        val needsDialog = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            !hasPermission(Manifest.permission.POST_NOTIFICATIONS)
+        if (needsDialog) {
             notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            return
+        }
+        openNotificationSettings()
+    }
+
+    private fun openNotificationSettings() {
+        val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+            .putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+        try {
+            systemScreenLauncher.launch(intent)
+        } catch (_: Exception) {
+            // この画面を持たない端末向けの逃げ道。
+            openAppSettings()
         }
     }
 
-    private fun isIgnoringBatteryOptimizations(): Boolean =
-        getSystemService(PowerManager::class.java)?.isIgnoringBatteryOptimizations(packageName) ?: true
-
     private fun requestBatteryExemption() {
-        if (isIgnoringBatteryOptimizations()) return
+        if (DeviceHealth.isIgnoringBatteryOptimizations(this)) return
         val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
             .setData(Uri.fromParts("package", packageName, null))
         try {

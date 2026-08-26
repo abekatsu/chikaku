@@ -3,12 +3,15 @@ package com.damburisoft.chikaku.watch.work
 import android.content.Context
 import android.util.Log
 import androidx.work.CoroutineWorker
+import androidx.work.ForegroundInfo
 import androidx.work.WorkerParameters
 import com.damburisoft.chikaku.watch.Graph
 import com.damburisoft.chikaku.watch.data.ApiResult
+import com.damburisoft.chikaku.watch.data.DeviceHealth
 import com.damburisoft.chikaku.watch.data.LocationPayload
 import com.damburisoft.chikaku.watch.data.PendingLocation
 import com.damburisoft.chikaku.watch.location.LocationTuning
+import com.damburisoft.chikaku.watch.service.TrackingNotification
 import java.time.Instant
 import java.time.format.DateTimeFormatter
 
@@ -30,13 +33,16 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
             return Result.success()
         }
         val deviceId = current.deviceId ?: return Result.success()
+        // キューの古さに関わらず「いまの設定」を送る (DeviceHealth の説明を参照)。
+        // 1 回の実行中に設定が変わることはないので、ループの外で 1 度だけ読む。
+        val health = DeviceHealth.read(applicationContext)
 
         while (true) {
             val batch = dao.oldest(BATCH_SIZE)
             if (batch.isEmpty()) return Result.success()
 
             for (row in batch) {
-                when (val result = Graph.api.postLocation(row.toPayload(deviceId))) {
+                when (val result = Graph.api.postLocation(row.toPayload(deviceId, health))) {
                     is ApiResult.Success -> {
                         dao.delete(row.id)
                         settings.setLastSentAt(System.currentTimeMillis())
@@ -73,13 +79,24 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         }
     }
 
-    private fun PendingLocation.toPayload(deviceId: String) = LocationPayload(
+    /**
+     * API 31 未満では expedited work が Foreground Service として実行されるため、
+     * これを実装しないと `IllegalStateException` で即座に落ちる。
+     * 31 以降は expedited job になり呼ばれないので、親の画面には何も出ない。
+     */
+    override suspend fun getForegroundInfo(): ForegroundInfo = ForegroundInfo(
+        TrackingNotification.UPLOAD_NOTIFICATION_ID,
+        TrackingNotification.buildUploading(applicationContext),
+    )
+
+    private fun PendingLocation.toPayload(deviceId: String, health: DeviceHealth) = LocationPayload(
         deviceId = deviceId,
         lat = lat,
         lng = lng,
         accuracy = accuracy,
         timestamp = ISO.format(Instant.ofEpochMilli(recordedAt)),
         batteryLevel = batteryLevel,
+        health = health,
     )
 
     private companion object {
