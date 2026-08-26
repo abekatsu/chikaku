@@ -155,6 +155,21 @@ app/src/main/java/com/damburisoft/chikaku/watch/
   （「静止している」と「異常が起きている」を子側が区別できるように）
 - 精度 **500m超** の測位結果は誤差が大きすぎるため破棄
 
+**ヘルスチェックは時計で駆動する**（`HeartbeatScheduler` / `HeartbeatReceiver`）。
+第1段の `setMinUpdateDistanceMeters(50m)` により、**静止中は測位コールバックが
+1度も発生しない**。送信可否の判定はコールバックの中にあるため、判定そのものに
+到達できない。当初はこれを見落としており、実機で自宅にいる間に5時間の空白が
+できていた。
+
+`AlarmManager.setAndAllowWhileIdle` を使う。WorkManager の定期実行は Doze 中に
+メンテナンス窓まで繰り延べられ 30 分の保証にならないため。exact alarm は使わない
+（「おおむね30分ごと」で足り、Android 12+ の `SCHEDULE_EXACT_ALARM` を親に
+求める価値がない）。
+
+アラームの宛先は Foreground Service ではなく **`HeartbeatReceiver`**。サービスが
+死んでいる状態で発火すると、背景からの Foreground Service 起動制限に触れて
+捕捉できない例外になりうるため、レシーバで受けて起動の失敗を握り潰す。
+
 ### 3.3 オフライン耐性
 
 測位結果は必ず Room のキューへ書き、送信成功後に削除する。
@@ -167,6 +182,7 @@ app/src/main/java/com/damburisoft/chikaku/watch/
 | その他 4xx | 試行10回で該当データを破棄 |
 | 長期圏外 | キュー上限500件、古いものから間引き |
 | サービスが落ちた | 1時間ごとの `WatchdogWorker` が検知して再起動 |
+| ヘルスチェックの予約が失われた | `WatchdogWorker` が残り時間で張り直す（0以下なら即時発火） |
 | 端末再起動 / アプリ更新 | `BootReceiver` が自動再開（FGS起動を拒否された場合は Watchdog が拾う） |
 
 ### 3.4 UI（高齢者向けの配慮）
@@ -515,7 +531,8 @@ Vite + React + TypeScript の SPA。Next.js は使わない（ADR-1）。
 
 | 対象 | 内容 |
 |---|---|
-| Android | `assembleDebug` / `assembleRelease` 成功（15MB / 1.8MB、R8 + lintVitalRelease 通過）、`lintDebug` エラー0・警告4（すべて既知・意図的） |
+| Android | `assembleDebug` / `assembleRelease` 成功（15MB / 1.8MB、R8 + lintVitalRelease 通過）、`lintDebug` エラー0・警告5（すべて既知・意図的） |
+| Android 単体テスト | **5件**（`LocationRepository.shouldSend` の判定を固定） |
 | iOS | `iphonesimulator` Debug / `iphoneos` Release ともにビルド成功（736KB）、警告0（Swift 6 strict concurrency 有効） |
 | iOS ↔ サーバー | ローカル Worker に対して**アプリ本体の `ApiClient` を直接叩く契約確認 12件**（`npm run test:ios`） |
 | サーバー | 単体 **9件**、e2e **30件**、clippy `-D warnings` クリーン |
@@ -617,6 +634,17 @@ debug ビルドで行った（署名設定はその後 §8.3 で作成した）�
   コードでの動作確認はこれから
 - **Cron Trigger の実動作は未観測。** 登録はされているが、90日経過データの
   削除が実際に走るのはまだ先
+- **ヘルスチェックのアラームを実機で確認していない。** 単体テストが固定して
+  いるのは判定の意味だけで、**`AlarmManager` が実際に30分後に発火して
+  測位まで至るかは未検証**。判定関数は元から正しく、欠陥は「静止中は呼ばれない」
+  ことだったので、テストは修正そのものを覆っていない。確認手順:
+
+  ```sh
+  # 予約されているか（ELAPSED_REALTIME_WAKEUP と HeartbeatReceiver が出ること）
+  adb shell dumpsys alarm | grep -A5 chikaku
+  # Doze を強制しても発火するか
+  adb shell dumpsys deviceidle force-idle
+  ```
 - **iOS は実機で一度も動かしていない。** バックグラウンド測位・SLC による
   復帰・`BGTaskScheduler` の実行間隔は、いずれもシミュレータでは再現されない。
   Apple Developer Program の更新が前提になる（§4.5）
@@ -783,8 +811,9 @@ apksigner verify --print-certs app/build/outputs/apk/release/app-release.apk
   `wrangler d1 execute` の2箇所を手で揃える運用
   （手順は `server/README.md` の「運用」）
 - 監査ログ（「誰がいつ位置を見たか」が追えない）
-- Android / iOS / サーバーともに自動テストは契約レベルのみ。
-  Android と iOS には単体テストが無い（iOS は通信層だけ `npm run test:ios` が見る）
+- 自動テストは契約レベルが中心。Android は送信可否の判定だけ単体テストで
+  固定した（5件）が、測位・サービスのライフサイクルは覆えていない。
+  iOS は通信層だけ `npm run test:ios` が見る
 - **iOS の「見守りが止まった」通知が未実装。** 権限は取得しているが送出していない。
   iOS は権限が剥がれやすい（OS が定期的に「使用中のみ」への変更を促す）ため、
   Android より効果が大きい

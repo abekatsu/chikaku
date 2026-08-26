@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.damburisoft.chikaku.watch.Graph
+import com.damburisoft.chikaku.watch.service.HeartbeatScheduler
 import com.damburisoft.chikaku.watch.service.LocationTrackingService
 
 /**
@@ -22,6 +23,14 @@ class WatchdogWorker(context: Context, params: WorkerParameters) : CoroutineWork
         if (settings.trackingEnabled && !LocationTrackingService.isRunning) {
             Log.i(TAG, "見守りが止まっていたため再開します")
             LocationTrackingService.start(applicationContext)
+        } else if (settings.trackingEnabled) {
+            // サービスは生きている。ヘルスチェックの予約だけが失われている場合に
+            // 備えて張り直す。残り時間を渡すのは、既に予約が生きているときに
+            // 発火を先送りしてしまわないため（0 以下なら即時発火になる）。
+            HeartbeatScheduler.schedule(
+                applicationContext,
+                Graph.locations.millisUntilHeartbeat(),
+            )
         }
         if (Graph.database.pendingLocationDao().count() > 0) {
             UploadScheduler.enqueueNow(applicationContext)

@@ -61,6 +61,13 @@
             android:exported="false"
             android:foregroundServiceType="location" />
 
+        <!-- 静止中のヘルスチェック用アラームの受け口。
+             アプリ内の AlarmManager からしか叩かれないため公開しない。 -->
+        <receiver
+            android:name=".service.HeartbeatReceiver"
+            android:enabled="true"
+            android:exported="false" />
+
         <receiver
             android:name=".service.BootReceiver"
             android:enabled="true"

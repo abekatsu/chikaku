@@ -54,13 +54,47 @@ class LocationRepository(
         val current = settings.current()
         val lastLat = current.lastQueuedLat
         val lastLng = current.lastQueuedLng
-        // 初回、またはヘルスチェック間隔を超えたら無条件で送る。
-        if (lastLat == null || lastLng == null) return true
-        if (now - current.lastQueuedAt >= LocationTuning.HEARTBEAT_INTERVAL_MILLIS) return true
+        val distance = if (lastLat == null || lastLng == null) {
+            null
+        } else {
+            val results = FloatArray(1)
+            Location.distanceBetween(lastLat, lastLng, location.latitude, location.longitude, results)
+            results[0]
+        }
+        return shouldSend(distance, now - current.lastQueuedAt)
+    }
 
-        val results = FloatArray(1)
-        Location.distanceBetween(lastLat, lastLng, location.latitude, location.longitude, results)
-        return results[0] >= LocationTuning.SEND_DISTANCE_THRESHOLD_METERS
+    /**
+     * 次のヘルスチェックまでの残り時間（ミリ秒）。0 以下なら今すぐ送るべき。
+     * [com.damburisoft.chikaku.watch.service.HeartbeatScheduler] が
+     * 無駄な測位を避けるために参照する。
+     */
+    suspend fun millisUntilHeartbeat(now: Long = System.currentTimeMillis()): Long {
+        val current = settings.current()
+        if (current.lastQueuedAt == 0L) return 0
+        return LocationTuning.HEARTBEAT_INTERVAL_MILLIS - (now - current.lastQueuedAt)
+    }
+
+    companion object {
+        /**
+         * 送信するかどうかの判定。
+         *
+         * **Android の API に依存しない純粋な関数にしてある。** この判定は
+         * 見守りの中核だが、以前ここに「静止中はそもそも呼ばれない」という
+         * 欠陥があり、実機で5時間の空白ができるまで誰も気づかなかった。
+         * 単体テストで固定できる形にしておく。
+         *
+         * @param distanceFromLastQueuedMeters 前回キュー投入地点からの距離。
+         *   まだ1件も送っていなければ null。
+         * @param millisSinceLastQueued 前回キュー投入からの経過時間。
+         */
+        fun shouldSend(distanceFromLastQueuedMeters: Float?, millisSinceLastQueued: Long): Boolean {
+            // 初回は無条件で送る。
+            if (distanceFromLastQueuedMeters == null) return true
+            // 動いていなくても、この間隔を超えたら生存を知らせる。
+            if (millisSinceLastQueued >= LocationTuning.HEARTBEAT_INTERVAL_MILLIS) return true
+            return distanceFromLastQueuedMeters >= LocationTuning.SEND_DISTANCE_THRESHOLD_METERS
+        }
     }
 
     private fun batteryLevel(): Int =

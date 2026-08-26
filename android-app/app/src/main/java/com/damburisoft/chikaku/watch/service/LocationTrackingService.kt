@@ -60,21 +60,24 @@ class LocationTrackingService : LifecycleService() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
 
-        when (intent?.action) {
-            ACTION_STOP -> {
-                stopTracking()
-                return Service.START_NOT_STICKY
-            }
-
-            ACTION_SEND_NOW -> {
-                promoteToForeground()
-                requestSingleLocation()
-                return Service.START_STICKY
-            }
+        if (intent?.action == ACTION_STOP) {
+            stopTracking()
+            return Service.START_NOT_STICKY
         }
 
         promoteToForeground()
-        startTracking()
+
+        // **どの経路で入っても継続測位を確実に張る。**
+        // 「今すぐ送信」やヘルスチェックでサービスが叩き起こされた場合、
+        // ここを通さないと1点だけ送って測位が止まったままになる。
+        val startedNow = startTracking()
+
+        // 開始時は startTracking が初回測位を済ませているので重ねない。
+        if (!startedNow &&
+            (intent?.action == ACTION_SEND_NOW || intent?.action == ACTION_HEARTBEAT)
+        ) {
+            requestSingleLocation()
+        }
         return Service.START_STICKY
     }
 
@@ -101,26 +104,36 @@ class LocationTrackingService : LifecycleService() {
         )
     }
 
-    private fun startTracking() {
-        if (updatesRequested) return
+    /**
+     * 継続測位を開始する。冪等。
+     * @return 今回この呼び出しで開始したら true（既に動いていたら false）
+     */
+    private fun startTracking(): Boolean {
+        if (updatesRequested) return false
         if (!hasLocationPermission()) {
             Log.w(TAG, "位置情報の権限がないため見守りを開始できません")
             stopTracking()
-            return
+            return false
         }
         try {
             fused.requestLocationUpdates(LocationTuning.locationRequest(), callback, mainLooper)
             updatesRequested = true
             // 起動直後は前回位置が古い可能性が高いので、1回だけ現在地を取りに行く。
             requestSingleLocation()
+            // 静止していても定期的に生存を知らせる。測位コールバックは
+            // 50m 動かないと発生しないため、これが無いと沈黙し続ける。
+            HeartbeatScheduler.schedule(this)
+            return true
         } catch (e: SecurityException) {
             Log.w(TAG, "位置情報の取得を拒否されました", e)
             stopTracking()
+            return false
         }
     }
 
     private fun stopTracking() {
         lifecycleScope.launch { Graph.settings.setTrackingEnabled(false) }
+        HeartbeatScheduler.cancel(this)
         if (updatesRequested) {
             fused.removeLocationUpdates(callback)
             updatesRequested = false
@@ -196,6 +209,7 @@ class LocationTrackingService : LifecycleService() {
 
         const val ACTION_STOP = "com.damburisoft.chikaku.watch.action.STOP"
         const val ACTION_SEND_NOW = "com.damburisoft.chikaku.watch.action.SEND_NOW"
+        const val ACTION_HEARTBEAT = "com.damburisoft.chikaku.watch.action.HEARTBEAT"
 
         /** Watchdog がサービスの生死を判断するために参照する。 */
         @Volatile
@@ -212,6 +226,14 @@ class LocationTrackingService : LifecycleService() {
         fun stop(context: Context) {
             context.startService(
                 Intent(context, LocationTrackingService::class.java).setAction(ACTION_STOP),
+            )
+        }
+
+        /** ヘルスチェックの測位。[HeartbeatReceiver] から呼ばれる。 */
+        fun heartbeat(context: Context) {
+            ContextCompat.startForegroundService(
+                context,
+                Intent(context, LocationTrackingService::class.java).setAction(ACTION_HEARTBEAT),
             )
         }
 
