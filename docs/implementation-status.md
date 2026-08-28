@@ -817,7 +817,7 @@ Issue #2 の目的（「送られてこない」のが静止なのか異常な�
 実データで効いた形になる。
 
 **精度500mの点が地図を跳ばす。** 12:32 / 12:53 / 13:44 / 15:38 はいずれも
-同一座標（35.xxxxx, 140.xxxxx）で精度500m。単一の基地局測位で、自宅から
+**同一座標**で精度500m。単一の基地局測位で、自宅から
 612m離れた位置に出る。`MAX_ACCEPTABLE_ACCURACY_METERS = 500` が
 「500 以下は通す」ためぎりぎり通過している。子から見ると親が600m跳んで戻る。
 
@@ -873,7 +873,8 @@ Issue #2 の目的（「送られてこない」のが静止なのか異常な�
 
 ### 8.1 ローカルで動かす
 
-**サーバー + ダッシュボード**（リポジトリ直下で実行）
+**手順は [getting-started.md](getting-started.md) に集約した**（英語版は
+[getting-started.en.md](getting-started.en.md)）。二重に書くと必ず片方が古くなる。
 
 ```sh
 npm install
@@ -881,47 +882,8 @@ npm run dev        # → http://localhost:5173
 ```
 
 Worker・ローカル D1・**Cloudflare Access の代役**をまとめて起動する。
-開発用の子アカウント（`dev@example.com`）でサインイン済みの状態で開く。
-
 ローカルには Access が居ないが、**検証を無効化する抜け道を Worker に作ると
 本番に混入しかねない**ので、代わりに検証を通る本物の JWT を用意する方式にしている。
-
-```sh
-npm run test:server   # e2e 30件
-cd server && cargo test && cargo clippy --target wasm32-unknown-unknown -- -D warnings
-cd client && npm run typecheck
-```
-
-**Androidアプリ**
-
-システムの JDK が新しすぎるため、CLI からは Android Studio 同梱の JBR を指定する。
-
-```sh
-export JAVA_HOME="/Users/YOUR_NAME/Applications/Android Studio.app/Contents/jbr/Contents/Home"
-cd android-app && ./gradlew :app:assembleDebug
-```
-
-サーバーURLは `local.properties`（リポジトリに含まれない）に書く。
-未設定でもビルドは通り、アプリ内の「詳細設定」から実行時に上書きできる。
-リリース署名も同じファイルから読む（§8.3）。
-
-**iPhoneアプリ**
-
-```sh
-cd ios-app
-cp Config/Chikaku.xcconfig.example Config/Chikaku.xcconfig   # 接続先を書く
-xcodebuild -project Chikaku.xcodeproj -scheme Chikaku -sdk iphonesimulator build
-```
-
-`Chikaku.xcodeproj` をそのまま Xcode で開いてもよい。外部依存は無い。
-
-```sh
-npm run test:ios   # 通信の契約確認 12件（ローカル Worker を自動で立てる）
-```
-
-**xcconfig では `//` 以降が行コメントとして落ちる。** `https://` をそのまま
-書くとスキームだけになって静かに壊れるため、雛形ではスラッシュを変数経由で
-挟んでいる。この形を崩さないこと。
 
 ### 8.2 配備の実施内容（2026-08-24 完了）
 
