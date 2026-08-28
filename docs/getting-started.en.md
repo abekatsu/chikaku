@@ -98,13 +98,25 @@ npm run test:ios   # 12 wire-contract tests (starts a local Worker automatically
 [`server/README.md`](../server/README.md) has the full procedure (Japanese).
 The essentials:
 
+### 0. Create your config file
+
+**`wrangler.jsonc` is not tracked in git** — it holds account-specific values, so
+it is treated the same way as `local.properties` and `Chikaku.xcconfig`.
+
+```sh
+cp wrangler.jsonc.example wrangler.jsonc
+```
+
+Replace the three `REPLACE_WITH_` values using the steps below.
+
 ### 1. Create the D1 database
 
 ```sh
 npx wrangler d1 create chikaku
 ```
 
-Put the returned `database_id` into `wrangler.jsonc` at the repository root.
+Put the returned `database_id` into `wrangler.jsonc`, replacing
+`REPLACE_WITH_D1_DATABASE_ID`.
 
 ```sh
 npm run db:migrate     # wrangler d1 migrations apply chikaku --remote
@@ -127,7 +139,8 @@ protected by the invite code and the `device_token` instead
 ([ADR-3](architecture-decisions.md), Japanese).
 
 Copy application 4's **AUD tag** and your **team domain** into `vars` in
-`wrangler.jsonc`. **If either is wrong, JWT verification fails and the entire
+`wrangler.jsonc`, replacing `REPLACE_WITH_ACCESS_APPLICATION_AUD` and
+`REPLACE_WITH_TEAM`. **If either is wrong, JWT verification fails and the entire
 dashboard returns 401.**
 
 ### 3. Register a family and its children

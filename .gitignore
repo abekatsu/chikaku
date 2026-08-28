@@ -2,3 +2,7 @@
 node_modules/
 # wrangler のローカル状態（Miniflare の D1 実体など）
 .wrangler/
+
+# Cloudflare の実値（アカウント固有）。雛形は wrangler.jsonc.example。
+# 秘密ではないが、リポジトリを汎用的に使えるようにするため追跡しない。
+/wrangler.jsonc

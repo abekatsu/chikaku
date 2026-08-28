@@ -1,3 +1,12 @@
+// このファイルの雛形。**wrangler.jsonc 本体は追跡していない。**
+//
+//   cp wrangler.jsonc.example wrangler.jsonc
+//
+// REPLACE_WITH_ で始まる3箇所を、自分の Cloudflare の値に差し替えること。
+// 手順は docs/getting-started.md を参照。
+//
+// 秘密ではないが、リポジトリを汎用的に使えるようにするため外に出している。
+// android-app/local.properties や ios-app/Config/Chikaku.xcconfig と同じ扱い。
 {
   // 1つの Worker が API と ダッシュボードの静的ファイルを
   // 同じオリジンで配る (ADR-2)。

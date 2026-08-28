@@ -23,6 +23,17 @@ FCM プッシュ通知は未実装（フェーズ2）。
 
 ## セットアップ
 
+### 0. 設定ファイルを用意する
+
+**`wrangler.jsonc` は追跡していない。** アカウント固有の値が入るため、
+`local.properties` や `Chikaku.xcconfig` と同じ扱いにしてある。
+
+```sh
+cp wrangler.jsonc.example wrangler.jsonc
+```
+
+`REPLACE_WITH_` で始まる3箇所を、以下の手順で得た値に差し替える。
+
 ### 1. D1 データベースを作る
 
 ```sh
@@ -52,7 +63,7 @@ Access がサインインを要求すると動かなくなる。これらは招�
 `device_token` で守られている（ADR-3）。
 
 アプリケーション 4 の **AUD タグ**と**チームドメイン**を `wrangler.jsonc` の
-`vars` に書き込む。
+`vars`（`REPLACE_WITH_ACCESS_APPLICATION_AUD` と `REPLACE_WITH_TEAM`）に書き込む。
 
 ```jsonc
 "vars": {

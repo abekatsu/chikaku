@@ -92,13 +92,25 @@ npm run test:ios   # 通信の契約確認 12件（ローカル Worker を自動
 
 手順は [`server/README.md`](../server/README.md) に詳しい。要点だけ挙げる。
 
+### 0. 設定ファイルを用意する
+
+**`wrangler.jsonc` は追跡していない。** アカウント固有の値が入るため、
+`local.properties` や `Chikaku.xcconfig` と同じ扱いにしてある。
+
+```sh
+cp wrangler.jsonc.example wrangler.jsonc
+```
+
+`REPLACE_WITH_` で始まる3箇所を、以下の手順で得た値に差し替える。
+
 ### 1. D1 を作る
 
 ```sh
 npx wrangler d1 create chikaku
 ```
 
-出力された `database_id` を、リポジトリ直下の `wrangler.jsonc` に書き込む。
+出力された `database_id` を `wrangler.jsonc` の
+`REPLACE_WITH_D1_DATABASE_ID` に書き込む。
 
 ```sh
 npm run db:migrate     # wrangler d1 migrations apply chikaku --remote
@@ -120,7 +132,8 @@ Zero Trust > Access > Applications で self-hosted アプリケーションを�
 守られている（[ADR-3](architecture-decisions.md)）。
 
 アプリケーション 4 の **AUD タグ**と**チームドメイン**を `wrangler.jsonc` の
-`vars` に書く。**誤っていると JWT 検証が通らず、ダッシュボードが全て 401 になる。**
+`vars`（`REPLACE_WITH_ACCESS_APPLICATION_AUD` と `REPLACE_WITH_TEAM`）に書く。
+**誤っていると JWT 検証が通らず、ダッシュボードが全て 401 になる。**
 
 ### 3. 家族と子アカウントを登録する
 

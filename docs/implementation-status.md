@@ -887,12 +887,16 @@ Worker・ローカル D1・**Cloudflare Access の代役**をまとめて起動�
 
 ### 8.2 配備の実施内容（2026-08-24 完了）
 
+**実際の値はリポジトリに含めない。** 公開して困るものではないが、
+汎用的に使えるようにするため `wrangler.jsonc` ごと追跡から外してある
+（[getting-started.md](getting-started.md)）。ここには形だけ残す。
+
 | | |
 |---|---|
 | 公開 URL | `https://chikaku.<subdomain>.workers.dev` |
-| Cloudflare アカウント | `REPLACE_WITH_CLOUDFLARE_ACCOUNT_ID` |
-| D1 | `chikaku` / `REPLACE_WITH_D1_DATABASE_ID`（APAC） |
-| Zero Trust チームドメイン | `https://REPLACE_WITH_TEAM.cloudflareaccess.com` |
+| Cloudflare アカウント | アカウント ID |
+| D1 | `chikaku` / `wrangler d1 create` が採番した ID（APAC） |
+| Zero Trust チームドメイン | `https://<team>.cloudflareaccess.com` |
 | ID プロバイダー | One-time PIN のみ（外部 IdP は未設定） |
 | Cron | `0 */6 * * *` |
 
