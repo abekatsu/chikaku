@@ -2,6 +2,7 @@ package com.damburisoft.chikaku.watch.data
 
 import android.content.Context
 import androidx.datastore.core.DataStore
+import androidx.datastore.core.deviceProtectedDataStoreFile
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -35,10 +36,16 @@ import kotlinx.coroutines.flow.map
 class SettingsStore(context: Context) {
 
     private val app = context.applicationContext
-    private val deviceContext = DeviceStorage.deviceProtected(app)
 
+    /**
+     * **`preferencesDataStoreFile` を端末保護 Context に対して呼んではいけない。**
+     * その実装は `File(this.applicationContext.filesDir, ...)` であり、
+     * せっかく切り替えた Context を捨てて認証情報暗号化ストレージへ戻す。
+     * 実機で一度これを踏み、設定が丸ごと旧来の場所に置かれたままになった。
+     * 端末保護ストレージ用には専用の `deviceProtectedDataStoreFile` を使う。
+     */
     private val deviceStore: DataStore<Preferences> = PreferenceDataStoreFactory.create(
-        produceFile = { deviceContext.preferencesDataStoreFile(DEVICE_STORE) },
+        produceFile = { app.deviceProtectedDataStoreFile(DEVICE_STORE_FILE) },
     )
 
     /**
@@ -147,6 +154,9 @@ class SettingsStore(context: Context) {
     companion object {
         /** 端末保護ストレージ側。旧バージョンでは同じ名前で CE 側に置かれていた。 */
         internal const val DEVICE_STORE = "chikaku_settings"
+
+        /** `deviceProtectedDataStoreFile` は拡張子を補わないので自分で付ける。 */
+        internal const val DEVICE_STORE_FILE = "$DEVICE_STORE.preferences_pb"
 
         /** 認証情報暗号化ストレージ側。トークンだけが入る。 */
         internal const val CREDENTIAL_STORE = "chikaku_credentials"

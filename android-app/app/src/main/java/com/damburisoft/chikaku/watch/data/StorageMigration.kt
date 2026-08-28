@@ -2,6 +2,7 @@ package com.damburisoft.chikaku.watch.data
 
 import android.content.Context
 import android.util.Log
+import androidx.datastore.core.deviceProtectedDataStoreFile
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.preferencesDataStoreFile
 import androidx.room.Room
@@ -34,9 +35,16 @@ internal object StorageMigration {
      * 移動先が既にあるかどうかは条件に入れない。**入れると引き継ぎが永久に
      * 走らなくなる経路ができる。** ロック解除前にプロセスが起きると、
      * 移動先のファイルは（中身が空でも）先に作られうるため。
+     *
+     * @param sameFile 引き継ぎ元と先が同じファイルを指しているか。
+     *   **これは設定の誤りであって、起きたら引き継ぎではなく修正が要る。**
+     *   実際に一度踏んだ（`preferencesDataStoreFile` が端末保護 Context を
+     *   捨てて認証情報側に戻す）。DataStore は「同じファイルに2つの
+     *   インスタンス」を例外で弾くだけなので、握り潰すと「引き継げないまま
+     *   動いている」状態が静かに残る。ここで先に落とす。
      */
-    fun shouldImport(userUnlocked: Boolean, legacyExists: Boolean): Boolean =
-        userUnlocked && legacyExists
+    fun shouldImport(userUnlocked: Boolean, legacyExists: Boolean, sameFile: Boolean = false): Boolean =
+        userUnlocked && legacyExists && !sameFile
 
     /**
      * 必要なら引き継ぐ。通常は旧ファイルの有無を見るだけで帰る。
@@ -54,7 +62,12 @@ internal object StorageMigration {
 
     private fun importPreferences(app: Context, settings: SettingsStore, unlocked: Boolean) {
         val legacyFile = app.preferencesDataStoreFile(SettingsStore.DEVICE_STORE)
-        if (!shouldImport(unlocked, legacyFile.exists())) return
+        val deviceFile = app.deviceProtectedDataStoreFile(SettingsStore.DEVICE_STORE_FILE)
+        val sameFile = legacyFile == deviceFile
+        if (sameFile) {
+            Log.e(TAG, "引き継ぎ元と先が同じファイルです。保存先の設定が誤っています: $legacyFile")
+        }
+        if (!shouldImport(unlocked, legacyFile.exists(), sameFile)) return
 
         // 旧ファイルはこの直後に消すため、DataStore の「1ファイル1インスタンス」制約に
         // 触れない。読むためだけの使い捨て。

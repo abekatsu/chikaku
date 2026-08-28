@@ -38,4 +38,21 @@ class StorageMigrationTest {
     fun `移動先が既にあっても引き継ぎを止めない`() {
         assertTrue(StorageMigration.shouldImport(userUnlocked = true, legacyExists = true))
     }
+
+    /**
+     * 引き継ぎ元と先が同じファイルを指すのは設定の誤り。実機で一度踏んでいる
+     * （`preferencesDataStoreFile` が端末保護 Context を捨てて元に戻す）。
+     * DataStore の例外を握り潰すと「引き継げないまま動いている」状態が
+     * 静かに残るので、その前に止める。
+     */
+    @Test
+    fun `引き継ぎ元と先が同じファイルなら実行しない`() {
+        assertFalse(
+            StorageMigration.shouldImport(
+                userUnlocked = true,
+                legacyExists = true,
+                sameFile = true,
+            ),
+        )
+    }
 }
