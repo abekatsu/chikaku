@@ -22,6 +22,29 @@ While they are not moving, it reports once every 30 minutes just to say it is al
 > **Is the silence because they are sitting still, or because something broke?**
 > Letting the children tell those apart is what the design is built around.
 
+## Screenshots
+
+![The dashboard: the parent's current position on the map, the device list on the right.](docs/images/dashboard.jpg)
+
+This is what a child opens in their browser. **The part worth looking at is the
+warning on the right**: "battery optimisation is not disabled" and "notifications
+cannot be shown". The parent's phone reports that about itself
+([#4](https://github.com/abekatsu/chikaku/issues/4)). **When monitoring is
+quietly broken, the children can see why.**
+
+The second device shows no warning. **Not because nothing is wrong, but because
+the iOS build does not report its health yet** — the server keeps that as `NULL`
+("not reported"), distinct from "no problem".
+
+![A device selected, with six hours of movement drawn over the map.](docs/images/dashboard-history.jpg)
+
+Selecting a device overlays its history. The points are sparse on purpose:
+**it only records when the position changes**, so while the parent is stationary
+a point appears just once every 30 minutes.
+
+> These are from the local development environment with dummy data.
+> No real family's location is shown.
+
 ## Architecture
 
 ```mermaid
