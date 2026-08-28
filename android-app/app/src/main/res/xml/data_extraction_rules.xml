@@ -1,17 +1,29 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- デバイストークンと位置履歴を含むため、クラウドバックアップ・端末間転送の
-     いずれからも除外する（プライバシー方針 CLAUDE.md §5）。 -->
+     いずれからも除外する（プライバシー方針 CLAUDE.md §5）。
+
+     device_* は端末保護ストレージ側 (Issue #3)。ロック解除前に見守りを
+     再開するため設定と送信待ちキューをそちらへ移したので、除外もそちらに
+     広げないと素通りする。端末間転送は allowBackup="false" では止まらない。 -->
 <data-extraction-rules>
     <cloud-backup>
         <exclude domain="root" />
         <exclude domain="database" />
         <exclude domain="sharedpref" />
         <exclude domain="file" />
+        <exclude domain="device_root" />
+        <exclude domain="device_database" />
+        <exclude domain="device_sharedpref" />
+        <exclude domain="device_file" />
     </cloud-backup>
     <device-transfer>
         <exclude domain="root" />
         <exclude domain="database" />
         <exclude domain="sharedpref" />
         <exclude domain="file" />
+        <exclude domain="device_root" />
+        <exclude domain="device_database" />
+        <exclude domain="device_sharedpref" />
+        <exclude domain="device_file" />
     </device-transfer>
 </data-extraction-rules>

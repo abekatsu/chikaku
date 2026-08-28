@@ -56,8 +56,12 @@
             </intent-filter>
         </activity>
 
+        <!-- directBootAware: 画面ロックの解除前から測位を始めるため (Issue #3)。
+             その間は Google Play services が動いていないので、サービス側で
+             LocationManager に切り替える。 -->
         <service
             android:name=".service.LocationTrackingService"
+            android:directBootAware="true"
             android:exported="false"
             android:foregroundServiceType="location" />
 
@@ -65,14 +69,20 @@
              アプリ内の AlarmManager からしか叩かれないため公開しない。 -->
         <receiver
             android:name=".service.HeartbeatReceiver"
+            android:directBootAware="true"
             android:enabled="true"
             android:exported="false" />
 
+        <!-- LOCKED_BOOT_COMPLETED は再起動の直後に届く。BOOT_COMPLETED のほうは
+             親が画面ロックを解除するまで配信されないため、これが無いと
+             解除するまで見守りが復帰しない (Issue #3)。 -->
         <receiver
             android:name=".service.BootReceiver"
+            android:directBootAware="true"
             android:enabled="true"
             android:exported="true">
             <intent-filter>
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>

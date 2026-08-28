@@ -10,8 +10,14 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.OutOfQuotaPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import com.damburisoft.chikaku.watch.data.DeviceStorage
 import java.util.concurrent.TimeUnit
 
+/**
+ * **どの入口もロック解除前は何もしない (Issue #3)。** WorkManager は自身の DB を
+ * 認証情報暗号化ストレージに置いており、Direct Boot 中に `getInstance` を呼ぶと
+ * 初期化できずに落ちる。解除前に積んだ位置は解除後の [enqueueNow] が掃き出す。
+ */
 object UploadScheduler {
 
     private const val WORK_UPLOAD = "chikaku-upload"
@@ -23,6 +29,7 @@ object UploadScheduler {
 
     /** 位置をキューに積んだ直後に呼ぶ。通信できる状態になり次第送られる。 */
     fun enqueueNow(context: Context) {
+        if (!DeviceStorage.isUserUnlocked(context)) return
         val request = OneTimeWorkRequestBuilder<UploadWorker>()
             .setConstraints(networkRequired)
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 1, TimeUnit.MINUTES)
@@ -39,6 +46,7 @@ object UploadScheduler {
 
     /** アプリ起動時に予約する定期ヘルスチェック。 */
     fun schedulePeriodicFlush(context: Context) {
+        if (!DeviceStorage.isUserUnlocked(context)) return
         val request = PeriodicWorkRequestBuilder<WatchdogWorker>(1, TimeUnit.HOURS)
             .setConstraints(networkRequired)
             .build()
@@ -47,6 +55,7 @@ object UploadScheduler {
     }
 
     fun cancelAll(context: Context) {
+        if (!DeviceStorage.isUserUnlocked(context)) return
         WorkManager.getInstance(context).apply {
             cancelUniqueWork(WORK_UPLOAD)
             cancelUniqueWork(WORK_WATCHDOG)

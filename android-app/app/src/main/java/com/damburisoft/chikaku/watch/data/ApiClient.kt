@@ -80,9 +80,12 @@ class ApiClient(private val settings: SettingsStore) {
      * キューの消化はワーカー側でこれを繰り返して行う。
      */
     suspend fun postLocation(payload: LocationPayload): ApiResult<Unit> {
-        val settings = settings.current()
-        val token = settings.deviceToken ?: return ApiResult.Unauthorized
-        val url = settings.serverBaseUrl.resolve("api/v1/location")
+        val current = settings.current()
+        // トークンだけは別の置き場所にあり、ロック解除前は読めない (Issue #3)。
+        // 送信経路は解除後にしか動かないため、ここが null になるのは
+        // 未ペアリングか引き継ぎ失敗のときだけ。
+        val token = settings.deviceToken() ?: return ApiResult.Unauthorized
+        val url = current.serverBaseUrl.resolve("api/v1/location")
             ?: return ApiResult.ClientError(0, "サーバーURLの形式が正しくありません")
         val body = json.encodeToString(payload)
         val request = Request.Builder()

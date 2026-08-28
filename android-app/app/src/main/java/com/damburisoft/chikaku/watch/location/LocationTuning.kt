@@ -1,5 +1,6 @@
 package com.damburisoft.chikaku.watch.location
 
+import android.location.LocationManager
 import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.Priority
 import java.util.concurrent.TimeUnit
@@ -33,6 +34,28 @@ object LocationTuning {
 
     /** 1件あたりの送信試行上限。超えたら捨てる。 */
     const val MAX_SEND_ATTEMPTS = 10
+
+    /**
+     * ロック解除前の測位間隔 (Issue #3)。通常時より短いのは、
+     * `LocationManager` にはバッチ配信 (`setMaxUpdateDelayMillis`) が無く、
+     * 間隔を延ばしても電池が戻ってこないため。この状態は親が画面ロックを
+     * 解除した時点で終わる。
+     */
+    val LOCKED_MIN_INTERVAL_MILLIS: Long = TimeUnit.MINUTES.toMillis(2)
+
+    /**
+     * ロック解除前に使う測位プロバイダを選ぶ。
+     *
+     * **`passive` を外す。** 他アプリの測位に相乗りするだけで、単独では何も
+     * 返さない。ロック解除前は測位している他アプリ自体がほとんど動いていない。
+     *
+     * **GPS を先に置く。** `network` プロバイダの実体は Google Play services 側に
+     * あり、Direct Boot 中は応答しない。屋外にいる前提なら GPS だけで足りる
+     * （このバグが出たのは走っている最中だった）。
+     */
+    fun lockedProviders(enabled: List<String>): List<String> =
+        enabled.filter { it != LocationManager.PASSIVE_PROVIDER }
+            .sortedBy { if (it == LocationManager.GPS_PROVIDER) 0 else 1 }
 
     private val INTERVAL_MILLIS = TimeUnit.MINUTES.toMillis(5)
     private val MIN_INTERVAL_MILLIS = TimeUnit.MINUTES.toMillis(2)

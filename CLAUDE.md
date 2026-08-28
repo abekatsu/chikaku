@@ -46,6 +46,10 @@
 - `FOREGROUND_SERVICE_LOCATION`（Android 14+、マニフェストで`foregroundServiceType="location"`を明示）
 - `POST_NOTIFICATIONS`（Android 13+、Foreground Serviceの常駐通知に必要）
 - Playストア公開時は「機微な権限の使用目的」宣言フォームと、アプリ内でのプロミネントディスクロージャー（背景で位置情報を使う理由の明示画面）が必須
+- **再起動後の復帰は `BOOT_COMPLETED` だけでは足りない。** これは親が画面ロックを解除するまで配信されないため、
+  解除せずに出かけるとその間は見守りが止まる。`LOCKED_BOOT_COMPLETED` + `directBootAware="true"` で受け、
+  起動判断に要る状態を端末保護ストレージに置く。ただし `device_token` はそちらへ移さず、
+  ロック解除前は測位とキュー投入までにとどめる（詳細は docs の §3.6）
 
 ### 2.4 サーバー送信
 - 位置が閾値を超えて変化した場合のみ HTTPS POST（`/api/v1/location`）
