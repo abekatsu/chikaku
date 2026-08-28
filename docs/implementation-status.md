@@ -1022,6 +1022,11 @@ apksigner verify --print-certs app/build/outputs/apk/release/app-release.apk
   依然として招待コードの有効期限の短さと 27^8 の空間
 - FCM Web Push 統合（フェーズ2）
 - ジオフェンス（フェーズ3）
+- **LINE で扱えるようにする（[#12](https://github.com/abekatsu/chikaku/issues/12)、いまは着手しない）。**
+  パッケージ化を考える段になって効いてくる話。子側にアカウントを作らせずに済み、
+  通知も確実に届く。**引き換えに位置情報の到達範囲が広がる**（トークに残り、
+  転送もできる）ので、何をどこまで流すかの線引きが実装より先に要る。
+  家族を対象とした実験が優先
 - 家族・子アカウントの管理画面。現在は Access のポリシーと
   `wrangler d1 execute` の2箇所を手で揃える運用
   （手順は `server/README.md` の「運用」）
