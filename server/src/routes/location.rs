@@ -5,7 +5,7 @@ use crate::auth::DeviceAuth;
 use crate::clock;
 use crate::db;
 use crate::error::{AppError, AppResult};
-use crate::routes::DeviceHealth;
+use crate::routes::{DeviceHealth, LocationSource};
 
 /// 端末の時計が進んでいても受け入れる上限。
 /// これを超えるものは明らかな異常として弾く。
@@ -24,7 +24,15 @@ pub struct LocationRequest {
     /// 端末設定の健康状態 (Issue #4)。この項目より前のアプリからは送られてこない。
     #[serde(default)]
     pub health: Option<DeviceHealth>,
+    /// 測位の出どころ (Issue #13)。この項目より前のアプリと iOS 版は送ってこない。
+    #[serde(default)]
+    pub source: Option<LocationSource>,
 }
+
+/// 端末が送ってくる `kind` の許容値。**知らない値は素通しせず弾く。**
+/// ダッシュボードはこの値で表示を変えるため、想定外の文字列が入ると
+/// 「衛星測位でも基地局測位でもないもの」が黙って混ざる。
+const SOURCE_KINDS: [&str; 3] = ["satellite", "network", "unknown"];
 
 #[derive(Debug, Serialize)]
 pub struct LocationAccepted {
@@ -76,6 +84,14 @@ pub async fn create(
         ));
     }
 
+    if let Some(source) = &req.source
+        && !SOURCE_KINDS.contains(&source.kind.as_str())
+    {
+        return Err(AppError::BadRequest(
+            "測位の出どころの値が正しくありません。".to_owned(),
+        ));
+    }
+
     // 健康状態は位置ではなく端末の情報なので、履歴には残さず最新だけを上書きする。
     // 端末は送信時点の値を送ってくるので、圏外で溜まっていた古いキューを
     // 消化している最中でも、ここに入るのは「いまの設定」になる。
@@ -107,8 +123,9 @@ pub async fn create(
             database
                 .prepare(
                     "INSERT OR IGNORE INTO location_events \
-                     (device_id, family_id, lat, lng, accuracy, recorded_at, received_at, battery_level) \
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                     (device_id, family_id, lat, lng, accuracy, recorded_at, received_at, battery_level, \
+                      source_kind, source_provider, source_has_altitude, source_has_speed, source_has_bearing) \
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
                 )
                 .bind(&[
                     db::text(&auth.device_id),
@@ -119,6 +136,12 @@ pub async fn create(
                     db::num(recorded_at),
                     db::num(now),
                     db::num(req.battery_level),
+                    // 報告が無ければ列は NULL のまま。0 で埋めない。
+                    db::opt_text(req.source.as_ref().map(|s| s.kind.as_str())),
+                    db::opt_text(req.source.as_ref().and_then(|s| s.provider.as_deref())),
+                    db::opt_flag(req.source.as_ref().map(|s| s.has_altitude)),
+                    db::opt_flag(req.source.as_ref().map(|s| s.has_speed)),
+                    db::opt_flag(req.source.as_ref().map(|s| s.has_bearing)),
                 ])?,
             touch_device,
         ],

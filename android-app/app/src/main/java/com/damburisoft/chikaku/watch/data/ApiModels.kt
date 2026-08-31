@@ -34,6 +34,25 @@ data class LocationPayload(
      * 古いアプリからは送られてこないため、サーバー側では省略可能。
      */
     val health: DeviceHealth? = null,
+    /**
+     * 測位の出どころ (Issue #13)。精度では区別できない誤りを見分けるために送る。
+     * 古いアプリからは送られてこないため、サーバー側では省略可能。
+     */
+    val source: LocationSourceReport? = null,
+)
+
+/**
+ * 出どころの判定結果と、その根拠になった生の値。
+ * **判定は経験則なので、根拠も一緒に送って後から見直せるようにしている。**
+ */
+@Serializable
+data class LocationSourceReport(
+    /** `satellite` / `network` / `unknown` */
+    val kind: String,
+    val provider: String? = null,
+    @SerialName("has_altitude") val hasAltitude: Boolean,
+    @SerialName("has_speed") val hasSpeed: Boolean,
+    @SerialName("has_bearing") val hasBearing: Boolean,
 )
 
 @Serializable

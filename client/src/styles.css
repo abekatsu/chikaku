@@ -682,3 +682,11 @@ h2 {
   margin: 8px 0 0;
   color: var(--text-muted);
 }
+
+/* 出どころが疑わしい測位の注記 (Issue #13)。
+   警告ほど強くしない。誤りとは限らず、確からしくないだけなので。 */
+.device__note--weak {
+  color: var(--text-muted);
+  border-left: 3px solid color-mix(in srgb, var(--text-muted) 50%, transparent);
+  padding-left: 0.6rem;
+}

@@ -9,7 +9,9 @@ import com.damburisoft.chikaku.watch.Graph
 import com.damburisoft.chikaku.watch.data.ApiResult
 import com.damburisoft.chikaku.watch.data.DeviceHealth
 import com.damburisoft.chikaku.watch.data.LocationPayload
+import com.damburisoft.chikaku.watch.data.LocationSourceReport
 import com.damburisoft.chikaku.watch.data.PendingLocation
+import com.damburisoft.chikaku.watch.location.LocationSource
 import com.damburisoft.chikaku.watch.location.LocationTuning
 import com.damburisoft.chikaku.watch.service.TrackingNotification
 import java.time.Instant
@@ -97,7 +99,25 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         timestamp = ISO.format(Instant.ofEpochMilli(recordedAt)),
         batteryLevel = batteryLevel,
         health = health,
+        source = sourceReport(),
     )
+
+    /**
+     * 出どころが分からない行（この列より前のアプリが積んだもの）は送らない。
+     * **null は「Wi-Fi 測位だった」ではなく「記録が無い」。**
+     */
+    private fun PendingLocation.sourceReport(): LocationSourceReport? {
+        val altitude = hasAltitude ?: return null
+        val speed = hasSpeed ?: return null
+        val bearing = hasBearing ?: return null
+        return LocationSourceReport(
+            kind = LocationSource.classify(altitude, speed, bearing).wireValue,
+            provider = provider,
+            hasAltitude = altitude,
+            hasSpeed = speed,
+            hasBearing = bearing,
+        )
+    }
 
     private companion object {
         const val TAG = "UploadWorker"

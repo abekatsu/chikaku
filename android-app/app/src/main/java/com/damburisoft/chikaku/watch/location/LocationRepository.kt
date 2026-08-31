@@ -43,6 +43,11 @@ class LocationRepository(
                 // 端末時計がずれていても順序が壊れないよう、測位時刻そのものを使う。
                 recordedAt = if (location.time > 0) location.time else now,
                 batteryLevel = batteryLevel(),
+                // 出どころの判断材料 (Issue #13)。判定そのものは送信時に行う。
+                provider = location.provider,
+                hasAltitude = location.hasAltitude(),
+                hasSpeed = location.hasSpeed(),
+                hasBearing = location.hasBearing(),
             )
         )
         dao.trimTo(LocationTuning.MAX_QUEUE_SIZE)

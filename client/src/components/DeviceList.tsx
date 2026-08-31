@@ -1,6 +1,7 @@
 import type { DeviceHealth, DeviceLatest } from "../api/types";
 import {
   accuracyLabel,
+  untrustedReason,
   batteryLabel,
   FRESHNESS_LABEL,
   absoluteTime,
@@ -93,6 +94,16 @@ function DeviceCard({ device, selected, onSelect, onFocus, onRevoke }: DeviceCar
               圏外でキューに溜まっていたことを意味する。見守る側にとっては
               「連絡が取れていなかった」情報なので、隠さず出す。
             */}
+            {/*
+              **測位の出どころが疑わしいとき、精度の数字を信じさせない（Issue #13）。**
+              Wi-Fi や基地局からの推定は 100m を自称しながら数 km 外すことがあり、
+              「誤差 約100m」だけを見せると、外れているときほど確信を与えてしまう。
+            */}
+            {untrustedReason(fix.source) && (
+              <p className="device__note device__note--weak">
+                <strong>おおよその位置です。</strong> {untrustedReason(fix.source)}
+              </p>
+            )}
             {isDelayed(fix.recorded_at, fix.received_at) && (
               <p className="device__note">
                 この位置は {relativeTime(fix.received_at)}に届きました（圏外だった可能性があります）

@@ -20,6 +20,15 @@ data class PendingLocation(
     /** 測位時刻（epoch millis, UTC） */
     val recordedAt: Long,
     val batteryLevel: Int,
+    /**
+     * 測位の出どころを判断するための生の値 (Issue #13)。
+     * **null は「該当しない」ではなく「この列より前のアプリが積んだ」。**
+     * 更新をまたいでキューに残った行を、誤って NETWORK と決めつけないため。
+     */
+    val provider: String? = null,
+    val hasAltitude: Boolean? = null,
+    val hasSpeed: Boolean? = null,
+    val hasBearing: Boolean? = null,
     /** 送信を試みて失敗した回数。増えすぎたものは捨てる。 */
     val attempts: Int = 0,
 )

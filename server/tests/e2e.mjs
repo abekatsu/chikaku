@@ -314,6 +314,57 @@ test("端末設定の健康状態が latest に出る", async () => {
   assert(typeof health.reported_at === "string", "reported_at が無い");
 });
 
+test("測位の出どころが latest と history に出る", async () => {
+  const family = await seedFamily("source@example.com");
+  const { deviceId, deviceToken } = await pairDevice(family.familyId, family.jwt);
+
+  const at = Date.now();
+  const post = await api("POST", "/location", {
+    bearer: deviceToken,
+    body: fix(deviceId, iso(at), {
+      source: {
+        kind: "network",
+        provider: "fused",
+        has_altitude: false,
+        has_speed: false,
+        has_bearing: false,
+      },
+    }),
+  });
+  assertEqual(post.status, 202, JSON.stringify(post.body));
+
+  const latest = await api("GET", `/families/${family.familyId}/latest`, { jwt: family.jwt });
+  assertEqual(latest.body.devices[0].latest.source, "network");
+
+  const history = await api("GET", `/families/${family.familyId}/history`, { jwt: family.jwt });
+  assertEqual(history.body.events[0].source, "network");
+});
+
+test("出どころを報告しない端末では null になる（network ではない）", async () => {
+  // **未報告を network に倒すと、iOS 版と旧アプリの測位が全部
+  // 「おおよその位置」として表示される。** 第三の状態として区別する。
+  const family = await seedFamily("nosource@example.com");
+  const { deviceId, deviceToken } = await pairDevice(family.familyId, family.jwt);
+
+  await api("POST", "/location", { bearer: deviceToken, body: fix(deviceId, iso(Date.now())) });
+
+  const latest = await api("GET", `/families/${family.familyId}/latest`, { jwt: family.jwt });
+  assertEqual(latest.body.devices[0].latest.source, null);
+});
+
+test("知らない出どころの値は拒否する", async () => {
+  const family = await seedFamily("badsource@example.com");
+  const { deviceId, deviceToken } = await pairDevice(family.familyId, family.jwt);
+
+  const post = await api("POST", "/location", {
+    bearer: deviceToken,
+    body: fix(deviceId, iso(Date.now()), {
+      source: { kind: "wifi", has_altitude: false, has_speed: false, has_bearing: false },
+    }),
+  });
+  assertEqual(post.status, 400, JSON.stringify(post.body));
+});
+
 test("健康状態を報告しない端末では null になる（false ではない）", async () => {
   const family = await seedFamily("nohealth@example.com");
   const { deviceId, deviceToken } = await pairDevice(family.familyId, family.jwt);

@@ -52,6 +52,10 @@ pub struct Fix {
     /// サーバーが受信した時刻。圏外で溜まっていた分はここが大きく遅れる。
     pub received_at: String,
     pub battery_level: i64,
+    /// 測位の出どころ (Issue #13)。`satellite` / `network` / `unknown`。
+    /// **null は「衛星測位だった」ではなく「報告が無い」。**
+    /// 判定の根拠になった生の値は DB にあるが、画面では使わないので返さない。
+    pub source: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -66,6 +70,7 @@ struct LatestRow {
     recorded_at: Option<Millis>,
     received_at: Option<Millis>,
     battery_level: Option<i64>,
+    source_kind: Option<String>,
     battery_unrestricted: Option<i64>,
     notifications_enabled: Option<i64>,
     background_location: Option<i64>,
@@ -85,7 +90,8 @@ pub async fn latest(
         "SELECT d.id, d.device_name, d.device_model, d.last_seen_at, \
                 d.battery_unrestricted, d.notifications_enabled, \
                 d.background_location, d.health_reported_at, \
-                e.lat, e.lng, e.accuracy, e.recorded_at, e.received_at, e.battery_level \
+                e.lat, e.lng, e.accuracy, e.recorded_at, e.received_at, e.battery_level, \
+                e.source_kind \
          FROM parent_devices d \
          LEFT JOIN location_events e ON e.id = ( \
              SELECT id FROM location_events \
@@ -114,6 +120,7 @@ pub async fn latest(
                         recorded_at: clock::to_rfc3339(recorded),
                         received_at: clock::to_rfc3339(received),
                         battery_level: r.battery_level.unwrap_or(-1),
+                        source: r.source_kind,
                     })
                 }
                 _ => None,
@@ -167,6 +174,8 @@ pub struct HistoryEvent {
     pub accuracy: f64,
     pub recorded_at: String,
     pub battery_level: i64,
+    /// 測位の出どころ (Issue #13)。**null は「報告が無い」。**
+    pub source: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -177,6 +186,7 @@ struct HistoryRow {
     accuracy: f64,
     recorded_at: Millis,
     battery_level: i64,
+    source_kind: Option<String>,
 }
 
 /// `GET /api/v1/families/{family_id}/history?from=&to=&device_id=&limit=`
@@ -214,7 +224,7 @@ pub async fn history(
     // 「NULL なら全件」を 1 本のクエリで表現する。
     let rows: Vec<HistoryRow> = db::all(
         database,
-        "SELECT device_id, lat, lng, accuracy, recorded_at, battery_level \
+        "SELECT device_id, lat, lng, accuracy, recorded_at, battery_level, source_kind \
          FROM location_events \
          WHERE family_id = ?1 AND recorded_at >= ?2 AND recorded_at <= ?3 \
            AND (?4 IS NULL OR device_id = ?4) \
@@ -240,6 +250,7 @@ pub async fn history(
             accuracy: r.accuracy,
             recorded_at: clock::to_rfc3339(r.recorded_at),
             battery_level: r.battery_level,
+            source: r.source_kind,
         })
         .collect();
 

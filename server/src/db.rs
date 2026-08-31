@@ -36,6 +36,15 @@ pub fn opt_text(v: Option<&str>) -> JsValue {
     }
 }
 
+/// 省略可能な真偽値。**None は 0 ではなく NULL。**
+/// 「報告が無い」を「false」に化けさせないため（Issue #4 / #13）。
+pub fn opt_flag(v: Option<bool>) -> JsValue {
+    match v {
+        Some(b) => flag(b),
+        None => JsValue::NULL,
+    }
+}
+
 /// 1 行だけ取る。行が無ければ `None`。
 pub async fn first<T: DeserializeOwned>(
     db: &D1Database,

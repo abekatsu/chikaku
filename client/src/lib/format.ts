@@ -1,3 +1,5 @@
+import type { LocationSourceKind } from "../api/types";
+
 /**
  * 「いつの情報か」を人が読める形にする。
  *
@@ -72,6 +74,32 @@ export function batteryLabel(level: number): string | null {
 export function accuracyLabel(meters: number): string {
   if (meters < 1000) return `誤差 約${Math.round(meters / 10) * 10}m`;
   return `誤差 約${(meters / 1000).toFixed(1)}km`;
+}
+
+/**
+ * その測位を額面どおり信じてよいか（Issue #13）。
+ *
+ * **判定を 1 か所に置く。** 地図と端末カードで食い違うと、
+ * 「地図では点線なのにカードは何も言わない」といった不整合が起きる。
+ *
+ * `null`（報告が無い）は **`true` に倒す。** 報告に対応する前のアプリと
+ * iOS 版が該当し、それらを「疑わしい」と表示すると、実際には正しい
+ * 大量の測位に警告が付いてしまう。
+ */
+export function isTrustedFix(source: LocationSourceKind | null): boolean {
+  return source !== "network" && source !== "unknown";
+}
+
+/** 疑わしい測位に添える理由。信頼できる場合は null。 */
+export function untrustedReason(source: LocationSourceKind | null): string | null {
+  switch (source) {
+    case "network":
+      return "Wi-Fi・基地局からの推定です。実際の場所と大きく離れることがあります。";
+    case "unknown":
+      return "測位の出どころを判別できませんでした。";
+    default:
+      return null;
+  }
 }
 
 /** 招待コードを読み上げやすいよう 4 文字ずつに区切る。 */

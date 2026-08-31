@@ -22,7 +22,23 @@ export interface Fix {
   received_at: string;
   /** 取得できなかった場合は -1 */
   battery_level: number;
+  /**
+   * 測位の出どころ（Issue #13）。`satellite` / `network` / `unknown`。
+   * **null は「衛星測位だった」ではなく「報告が無い」。**
+   * 報告に対応する前のアプリと iOS 版は送ってこない。
+   */
+  source: LocationSourceKind | null;
 }
+
+/**
+ * 測位の出どころ。
+ *
+ * `network`（Wi-Fi・基地局）は**実測ではなくデータベース上の登録位置**で、
+ * アクセスポイントが移動していると大きく外れる。実際、100m を自称しながら
+ * 7km 外した測位が記録された。**精度の数字では見分けられない**ため、
+ * 出どころで区別する。
+ */
+export type LocationSourceKind = "satellite" | "network" | "unknown";
 
 /**
  * 親端末の設定のうち、見守りの成否を左右するもの（Issue #4）。
@@ -66,6 +82,8 @@ export interface HistoryEvent {
   accuracy: number;
   recorded_at: string;
   battery_level: number;
+  /** **null は「報告が無い」。** [[Fix.source]] を参照。 */
+  source: LocationSourceKind | null;
 }
 
 export interface HistoryResponse {
