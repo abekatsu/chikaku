@@ -57,6 +57,10 @@ object LocationTuning {
         enabled.filter { it != LocationManager.PASSIVE_PROVIDER }
             .sortedBy { if (it == LocationManager.GPS_PROVIDER) 0 else 1 }
 
+    /**
+     * 基本の測位間隔。**ここを短くすると HIGH_ACCURACY の代償が直に効く。**
+     * 歩行者の移動速度なら 5 分で十分（CLAUDE.md §2.2）。
+     */
     private val INTERVAL_MILLIS = TimeUnit.MINUTES.toMillis(5)
     private val MIN_INTERVAL_MILLIS = TimeUnit.MINUTES.toMillis(2)
     private val MAX_UPDATE_DELAY_MILLIS = TimeUnit.MINUTES.toMillis(15)
@@ -64,9 +68,22 @@ object LocationTuning {
     /**
      * 歩行者の移動速度なら数分間隔で十分。[setMaxUpdateDelayMillis] でバッチ配信を
      * 許可し、CPUのウェイクアップ回数を減らす。
+     *
+     * **`PRIORITY_HIGH_ACCURACY` を使う (Issue #13)。** 当初は
+     * `PRIORITY_BALANCED_POWER_ACCURACY` だったが、これは公式ドキュメントに
+     * 「GPS をほとんど使わず、主に Wi-Fi と基地局の情報を使う」と明記されている。
+     * その結果、訪問していない場所が 7km 離れた位置に2時間ぶん記録された。
+     * Wi-Fi 測位が返すのはアクセスポイントの登録位置であって実測ではなく、
+     * 列車の車内 Wi-Fi のように AP 自体が動く場合、答えは大きく外れる。
+     *
+     * **電池への影響は間隔の設定で抑えている。** 常時測位ではなく
+     * [INTERVAL_MILLIS] ごと、かつ [MIN_UPDATE_DISTANCE_METERS] 動かない限り
+     * 配信もされない。GNSS が連続で回るわけではないので、
+     * 「HIGH_ACCURACY = 電池を焼く」という一般論はそのまま当てはまらない。
+     * **ただし増えることは確かで、実測は必要**（docs §7.3）。
      */
     fun locationRequest(): LocationRequest =
-        LocationRequest.Builder(Priority.PRIORITY_BALANCED_POWER_ACCURACY, INTERVAL_MILLIS)
+        LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, INTERVAL_MILLIS)
             .setMinUpdateIntervalMillis(MIN_INTERVAL_MILLIS)
             .setMinUpdateDistanceMeters(MIN_UPDATE_DISTANCE_METERS)
             .setMaxUpdateDelayMillis(MAX_UPDATE_DELAY_MILLIS)

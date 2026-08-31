@@ -32,7 +32,10 @@
 `LocationRequest.Builder` の以下のパラメータを組み合わせる：
 
 - `setMinUpdateDistanceMeters(50f〜100f)` — 前回位置から一定距離動かない限り更新自体を発生させない（最重要。ポーリングではなく「変化」をトリガーにする核）
-- `setPriority(Priority.PRIORITY_BALANCED_POWER_ACCURACY)` — GPS単独よりWi-Fi/セルベースで消費電力を抑える。屋外精度が必要な場面のみ`PRIORITY_HIGH_ACCURACY`に切替
+- `setPriority(Priority.PRIORITY_HIGH_ACCURACY)` — **当初は `PRIORITY_BALANCED_POWER_ACCURACY` を指定していたが撤回した（Issue #13）。**
+  BALANCED は「GPS をほとんど使わず主に Wi-Fi と基地局を使う」と公式に明記されており、実運用で**訪問していない場所が 7km 離れた位置に2時間ぶん記録された**。
+  Wi-Fi 測位が返すのはアクセスポイントの登録位置であって実測ではなく、車内 Wi-Fi のように AP が動く場合は大きく外れる。
+  電池は `setIntervalMillis` と `setMinUpdateDistanceMeters` で抑える方針に切り替える（常時測位ではないので GNSS が連続で回るわけではない）
 - `setIntervalMillis` / `setMinUpdateIntervalMillis` — 基本間隔は数分〜十数分単位。歩行者の移動速度を考えれば十分
 - `setMaxUpdateDelayMillis` — バッチ処理を有効化し、複数回分の位置更新をまとめてコールバックさせることでCPUウェイクアップ回数を削減
 
