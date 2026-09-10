@@ -12,6 +12,8 @@ import android.content.pm.ServiceInfo
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
+import android.net.ConnectivityManager
+import android.net.Network
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
@@ -39,6 +41,9 @@ import kotlinx.coroutines.tasks.await
 /**
  * 位置情報を監視し続ける Foreground Service。
  *
+ * **回線の復帰も見ている (Issue #15)。** 常駐しているのはこのサービスだけなので、
+ * 「圏外から戻った瞬間に溜まったぶんを送る」を担えるのもここしかない。
+ *
  * 測位そのものは [LocationTuning.locationRequest] の設定によって「一定距離動いたとき」
  * にしか発生しない。このサービスが常駐するのは、OSにプロセスを殺されないための
  * 器であって、能動的にポーリングするためではない。
@@ -54,6 +59,7 @@ class LocationTrackingService : LifecycleService() {
     private var updatesRequested = false
     private var usingLockedSource = false
     private var unlockReceiverRegistered = false
+    private var networkCallbackRegistered = false
 
     private val callback = object : LocationCallback() {
         override fun onLocationResult(result: LocationResult) {
@@ -82,12 +88,26 @@ class LocationTrackingService : LifecycleService() {
         override fun onReceive(context: Context, intent: Intent) = onUserUnlocked()
     }
 
+    /**
+     * 回線が戻ったことを受け取る (Issue #15)。
+     *
+     * **`onAvailable` は「外に出られる」ことを保証しない。** 実機では、下に
+     * 何も無い VPN が `VALIDATED` のまま残り、DNS が 11 ミリ秒で失敗し続けた。
+     * それでも構わない。ここは「試す機会を作る」だけの役で、外れたときは
+     * バックオフに戻り、毎時の [com.damburisoft.chikaku.watch.work.WatchdogWorker]
+     * が改めて解除する。
+     */
+    private val networkCallback = object : ConnectivityManager.NetworkCallback() {
+        override fun onAvailable(network: Network) = onNetworkAvailable()
+    }
+
     override fun onCreate() {
         super.onCreate()
         Graph.ensureInitialized(this)
         fused = LocationServices.getFusedLocationProviderClient(this)
         isRunning = true
         observeStateForNotification()
+        registerNetworkCallback()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -122,6 +142,7 @@ class LocationTrackingService : LifecycleService() {
     override fun onDestroy() {
         stopLocationUpdates()
         unregisterUnlockReceiver()
+        unregisterNetworkCallback()
         isRunning = false
         super.onDestroy()
     }
@@ -245,7 +266,9 @@ class LocationTrackingService : LifecycleService() {
         startTracking()
         UploadScheduler.schedulePeriodicFlush(this)
         // ロック解除前に溜めたぶんを送る。ここまで来て初めて宛先の認証ができる。
-        UploadScheduler.enqueueNow(this)
+        // **再起動を挟むと、以前のバックオフごと復元されていることがある。**
+        // ここで待たされると再起動直後の見守りが数時間止まるので捨てる (Issue #15)。
+        lifecycleScope.launch { UploadScheduler.retryNow(this@LocationTrackingService) }
     }
 
     private fun registerUnlockReceiver() {
@@ -263,6 +286,40 @@ class LocationTrackingService : LifecycleService() {
         if (!unlockReceiverRegistered) return
         unregisterReceiver(unlockReceiver)
         unlockReceiverRegistered = false
+    }
+
+    /**
+     * ロック解除前でも張ってよい。`ConnectivityManager` は Direct Boot 中も動くし、
+     * 実際の送信は [UploadScheduler.retryNow] がその場で解除状態を見て弾く。
+     */
+    private fun registerNetworkCallback() {
+        if (networkCallbackRegistered) return
+        val manager = getSystemService(ConnectivityManager::class.java) ?: return
+        try {
+            // 既定のネットワークだけを見る。アプリが実際に使う経路がこれなので、
+            // 個別のネットワークを列挙するより素直に「戻った」を拾える。
+            manager.registerDefaultNetworkCallback(networkCallback)
+            networkCallbackRegistered = true
+        } catch (e: Exception) {
+            // 監視できなくても見守りは続ける。復帰が毎時まで遅れるだけで済む。
+            Log.w(TAG, "回線の監視を開始できませんでした", e)
+        }
+    }
+
+    private fun unregisterNetworkCallback() {
+        if (!networkCallbackRegistered) return
+        getSystemService(ConnectivityManager::class.java)?.unregisterNetworkCallback(networkCallback)
+        networkCallbackRegistered = false
+    }
+
+    private fun onNetworkAvailable() {
+        lifecycleScope.launch {
+            // 送るものが無ければ WorkManager に触らない。移動中は回線の
+            // 切り替わりが何度も起きるので、そのたびにワークを積み直さない。
+            if (Graph.database.pendingLocationDao().count() == 0) return@launch
+            Log.i(TAG, "回線が戻ったため送信をやり直します")
+            UploadScheduler.retryNow(this@LocationTrackingService)
+        }
     }
 
     /** ユーザーが「今すぐ送信する」を押したとき、および起動直後の初回測位。 */

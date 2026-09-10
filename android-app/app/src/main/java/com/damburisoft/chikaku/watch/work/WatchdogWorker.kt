@@ -12,6 +12,11 @@ import com.damburisoft.chikaku.watch.service.LocationTrackingService
  * 定期ヘルスチェック（CLAUDE.md §2.1）。
  * OSに Foreground Service を落とされていた場合に気付いて起こし直し、
  * ついでに溜まっているキューの掃き出しも促す。
+ *
+ * **キューの掃き出しは「促す」では足りない (Issue #15)。** 回線が戻っても
+ * 送信ワークのバックオフが残り続けるため、ここが唯一の定期的な解除機会になる。
+ * 即時の復帰は [com.damburisoft.chikaku.watch.service.LocationTrackingService] が
+ * 張るネットワークの監視が受け持ち、こちらはそれが取りこぼしたときの受け皿。
  */
 class WatchdogWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
 
@@ -33,7 +38,11 @@ class WatchdogWorker(context: Context, params: WorkerParameters) : CoroutineWork
             )
         }
         if (Graph.database.pendingLocationDao().count() > 0) {
-            UploadScheduler.enqueueNow(applicationContext)
+            // **enqueueNow ではなく retryNow (Issue #15)。** 回線断でバックオフが
+            // 伸びたワークは `ExistingWorkPolicy.KEEP` に弾かれるため、
+            // ここで呼んでいたのに一度も救済にならなかった。毎時のこの呼び出しが
+            // バックオフを捨てることで、沈黙は最大1時間に収まる。
+            UploadScheduler.retryNow(applicationContext)
         }
         return Result.success()
     }
