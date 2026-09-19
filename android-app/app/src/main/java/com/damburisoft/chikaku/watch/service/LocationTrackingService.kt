@@ -14,6 +14,8 @@ import android.location.LocationListener
 import android.location.LocationManager
 import android.net.ConnectivityManager
 import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
@@ -96,6 +98,8 @@ class LocationTrackingService : LifecycleService() {
      * それでも構わない。ここは「試す機会を作る」だけの役で、外れたときは
      * バックオフに戻り、毎時の [com.damburisoft.chikaku.watch.work.WatchdogWorker]
      * が改めて解除する。
+     *
+     * 何を「戻った」と見なすかは [registerNetworkCallback] を参照。
      */
     private val networkCallback = object : ConnectivityManager.NetworkCallback() {
         override fun onAvailable(network: Network) = onNetworkAvailable()
@@ -291,14 +295,27 @@ class LocationTrackingService : LifecycleService() {
     /**
      * ロック解除前でも張ってよい。`ConnectivityManager` は Direct Boot 中も動くし、
      * 実際の送信は [UploadScheduler.retryNow] がその場で解除状態を見て弾く。
+     *
+     * **既定ネットワークではなく、物理回線の出現を見る。** 当初は
+     * `registerDefaultNetworkCallback` を使っていたが、VPN が有効な端末では
+     * アプリの既定ネットワークは VPN そのものになる。Wi-Fi が戻っても
+     * VPN の下が差し替わるだけで既定は変わらず、`onAvailable` は再発火しない。
+     * 2026-09-19 の実機で確認した: 20:32:31 に Wi-Fi が戻ったのに何も起きず、
+     * 送信は 4 分後のバックオフ再試行まで待たされた。試行回数が伸びていれば
+     * 数時間になる。これは Issue #15 で直したかった場面そのものである。
+     *
+     * `NetworkRequest` は既定で VPN を除外するため、この監視は Wi-Fi や
+     * モバイルデータが上がった瞬間に反応する。VPN 経由でも実際の通信は
+     * その物理回線を通るので、「試す機会」としてはこちらが正しい。
      */
     private fun registerNetworkCallback() {
         if (networkCallbackRegistered) return
         val manager = getSystemService(ConnectivityManager::class.java) ?: return
         try {
-            // 既定のネットワークだけを見る。アプリが実際に使う経路がこれなので、
-            // 個別のネットワークを列挙するより素直に「戻った」を拾える。
-            manager.registerDefaultNetworkCallback(networkCallback)
+            val request = NetworkRequest.Builder()
+                .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                .build()
+            manager.registerNetworkCallback(request, networkCallback)
             networkCallbackRegistered = true
         } catch (e: Exception) {
             // 監視できなくても見守りは続ける。復帰が毎時まで遅れるだけで済む。
@@ -315,7 +332,8 @@ class LocationTrackingService : LifecycleService() {
     private fun onNetworkAvailable() {
         lifecycleScope.launch {
             // 送るものが無ければ WorkManager に触らない。移動中は回線の
-            // 切り替わりが何度も起きるので、そのたびにワークを積み直さない。
+            // 切り替わりが何度も起きるし、登録した直後には既存の回線ぶん
+            // まとめて呼ばれるので、そのたびにワークを積み直さない。
             if (Graph.database.pendingLocationDao().count() == 0) return@launch
             Log.i(TAG, "回線が戻ったため送信をやり直します")
             UploadScheduler.retryNow(this@LocationTrackingService)

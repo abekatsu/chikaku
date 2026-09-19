@@ -218,8 +218,12 @@ app/src/main/java/com/damburisoft/chikaku/watch/
 
 対処は2段構え。
 
-1. `LocationTrackingService` が `registerDefaultNetworkCallback` を張り、
-   `onAvailable` で `UploadScheduler.retryNow` を呼ぶ。**即時復帰はこちら。**
+1. `LocationTrackingService` が INTERNET 能力を持つ回線の `NetworkRequest` を
+   `registerNetworkCallback` で張り、`onAvailable` で `UploadScheduler.retryNow` を呼ぶ。
+   **即時復帰はこちら。**
+   **`registerDefaultNetworkCallback` ではない。** VPN が有効だとアプリの既定
+   ネットワークは VPN そのものになり、Wi-Fi が戻っても既定は変わらず
+   `onAvailable` は再発火しない（2026-09-19 の実機で確認。§7.3）。
 2. `WatchdogWorker` も `enqueueNow` から `retryNow` に変える。1 が取りこぼしたときの
    受け皿で、沈黙を最大1時間に抑える。
 
@@ -949,22 +953,39 @@ Issue #2 の目的（「送られてこない」のが静止なのか異常な�
   （対象区間が伸びたため）。いずれにせよ「倍増までなら許容」の範囲に収まっており、
   Activity Recognition による見直しは当面不要。
 
-- **回線復帰でバックオフを捨てる修正が実機で未検証 (Issue #15)。** 単体テストで
-  固定してあるのは判断部分だけで、`registerDefaultNetworkCallback` が実際に
-  `onAvailable` を返すかは端末で確かめていない。確認手順:
+- **回線復帰でバックオフを捨てる修正は、実機で一度外れている (Issue #15)。**
+  2026-09-19 に2つの条件で試した。
 
-  1. 機内モードを ON にして 30 分以上放置する（`run_attempt_count` を伸ばす）
-  2. `adb shell dumpsys jobscheduler` で `UploadWorker` の次回実行が
-     数十分先になっていることを確認する
-  3. 機内モードを OFF にする
-  4. **1分以内に** キューが空になり、サーバーに届くこと
+  | 条件 | 結果 |
+  |---|---|
+  | 機内モード + Wi-Fi OFF → 復帰 | 復帰から **2秒**で送信。ただし**これは #15 の再現ではない** |
+  | Tailscale ON + Wi-Fi OFF → Wi-Fi ON | バックオフは 1→2→4 分と伸びた（再現成功）。**しかし `onAvailable` が呼ばれず**、送信は4分後の定期再試行まで待った |
+
+  機内モードでは `NetworkType.CONNECTED` が満たされないため `UploadWorker` は
+  一度も走らず、バックオフも付かない。回線が戻れば WorkManager 自身が起動する。
+  **この経路は修正前から動いていた。** #15 が起きるのは「WorkManager は接続済みと
+  見なすが外に出られない」ときで、下に何も無い VPN がそれを作る。
+
+  2つ目の条件で `registerDefaultNetworkCallback` が沈黙した理由は、VPN が有効だと
+  アプリの既定ネットワークが VPN そのものになるため。Wi-Fi が戻っても VPN の
+  下が差し替わるだけで、既定は変わらない。INTERNET 能力の `NetworkRequest` に
+  切り替えて対処したが、**切り替え後は未検証。** 確認手順:
+
+  1. VPN（Tailscale 等）を ON にしたまま Wi-Fi を OFF にする
+     （`Active default network: none` かつ VPN が `CONNECTED` になっていること）
+  2. ヘルスチェックで1件積まれるのを待つ（最大30分）。`UploadWorker` が
+     `UnknownHostException` で失敗し、`run_attempt_count` が 3 以上になるまで待つ
+  3. `adb shell dumpsys jobscheduler` で次回実行が数分〜数十分先であることを確認
+  4. Wi-Fi ON
+  5. **1分以内に** `回線が戻ったため送信をやり直します` が出て、サーバーに届くこと
 
   ```
-  adb logcat -s TrackingService:V UploadWorker:V   # 「回線が戻ったため送信をやり直します」
+  adb logcat -G 16M    # この端末はリングバッファが実質2分ぶんしか残らない
+  adb logcat -s TrackingService:V UploadWorker:V
   ```
 
-  この端末は logcat のリングバッファが実質2分ぶんしか残らない。
-  確認の前に `adb logcat -G 16M` で広げること。
+  `am start-foreground-service` で送信を起こすことはできない
+  （サービスは `exported=false`。正しい設定なので変えない）。
 - **電池の最適化を除外したあとの挙動が未確認。** 2026-08-28 の走行（7.2）は
   除外**しないまま**の測定で、走行中は30分のヘルスチェックしか通らなかった。
   **除外すれば2分間隔の軌跡が出るはず、というところがまだ実測されていない。**
