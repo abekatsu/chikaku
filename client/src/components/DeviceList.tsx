@@ -1,13 +1,13 @@
 import type { DeviceHealth, DeviceLatest } from "../api/types";
 import {
   accuracyLabel,
-  untrustedReason,
   batteryLabel,
   FRESHNESS_LABEL,
   absoluteTime,
   freshness,
   relativeTime,
 } from "../lib/format";
+import { DISTRUST_LABEL, distrustReason } from "../lib/trust";
 
 interface DeviceListProps {
   devices: DeviceLatest[];
@@ -64,6 +64,7 @@ function DeviceCard({ device, selected, onSelect, onFocus, onRevoke }: DeviceCar
   const fix = device.latest;
   const state = freshness(fix?.recorded_at ?? null);
   const battery = fix ? batteryLabel(fix.battery_level) : null;
+  const distrust = fix ? distrustReason(fix) : null;
 
   return (
     <li className={`device${selected ? " device--selected" : ""}`}>
@@ -95,13 +96,14 @@ function DeviceCard({ device, selected, onSelect, onFocus, onRevoke }: DeviceCar
               「連絡が取れていなかった」情報なので、隠さず出す。
             */}
             {/*
-              **測位の出どころが疑わしいとき、精度の数字を信じさせない（Issue #13）。**
+              **測位が疑わしいとき、精度の数字を信じさせない（Issue #13, #16）。**
               Wi-Fi や基地局からの推定は 100m を自称しながら数 km 外すことがあり、
               「誤差 約100m」だけを見せると、外れているときほど確信を与えてしまう。
+              最新位置には前後の点が無いので、判定は誤差の形と自己申告だけによる。
             */}
-            {untrustedReason(fix.source) && (
+            {distrust && (
               <p className="device__note device__note--weak">
-                <strong>おおよその位置です。</strong> {untrustedReason(fix.source)}
+                <strong>おおよその位置です。</strong> {DISTRUST_LABEL[distrust]}
               </p>
             )}
             {isDelayed(fix.recorded_at, fix.received_at) && (

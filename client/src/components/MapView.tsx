@@ -2,7 +2,8 @@ import L from "leaflet";
 import { useEffect, useRef } from "react";
 
 import type { DeviceLatest, HistoryEvent } from "../api/types";
-import { freshness, isTrustedFix, relativeTime } from "../lib/format";
+import { freshness, relativeTime } from "../lib/format";
+import { isTrustedFix, trustedHistory } from "../lib/trust";
 
 /** 端末が1つも位置を持たないときの初期表示（東京駅）。 */
 const FALLBACK_CENTER: L.LatLngExpression = [35.6812, 139.7671];
@@ -113,9 +114,10 @@ export function MapView({
       points.push(position);
 
       // 測位誤差を円で示す。点だけ出すと精度を過大に見せてしまう。
-      // **疑わしい測位は破線と灰色にする（Issue #13）。** Wi-Fi や基地局からの
+      // **疑わしい測位は破線と灰色にする（Issue #13, #16）。** Wi-Fi や基地局からの
       // 推定は 100m を自称して数 km 外すことがあり、実線で描くと嘘の確信を与える。
-      const trusted = isTrustedFix(fix.source);
+      // 最新位置には前後の点が無いので、スパイク判定はここでは効かない。
+      const trusted = isTrustedFix(fix);
       L.circle(position, {
         radius: fix.accuracy,
         color: trusted ? "#1B5E8C" : "#8A8A8A",
@@ -160,14 +162,16 @@ export function MapView({
 
     const points: L.LatLngExpression[] = history.map((e) => [e.lat, e.lng]);
 
-    // **経路を信頼度で描き分ける（Issue #13）。** 疑わしい点を消してしまうと
+    // **経路を信頼度で描き分ける（Issue #13, #16）。** 疑わしい点を消してしまうと
     // 「病院にいた」まで消える。消さずに、確からしくないことを線で伝える。
     // 隣接する 2 点のどちらかが疑わしければ、その区間を破線にする。
+    // 前後の点を見るスパイク判定があるため、点ごとの判定は先にまとめて行う。
+    const trustedPoints = trustedHistory(history);
     for (let i = 0; i < history.length - 1; i += 1) {
       const a = history[i];
       const b = history[i + 1];
       if (!a || !b) continue;
-      const trusted = isTrustedFix(a.source) && isTrustedFix(b.source);
+      const trusted = trustedPoints[i] === true && trustedPoints[i + 1] === true;
       L.polyline(
         [
           [a.lat, a.lng],
