@@ -195,4 +195,11 @@ are measurements taken that way**, not estimates.
 
 ## Licence
 
-A personal project.
+[MIT](LICENSE). A personal project, but licensed so it can actually be read and
+reused.
+
+**If you intend to rely on it to watch over someone, read §7.3 of
+[implementation-status.md](docs/implementation-status.md) first** — the list of
+what has *not* been verified. This is still running for a single family, and
+**positions do sometimes fail to arrive**; the causes and workarounds are in the
+issues. The MIT warranty disclaimer means exactly what it says.
