@@ -5,6 +5,7 @@
 
 - 構成上の判断と理由 → [architecture-decisions.md](architecture-decisions.md)
 - 認証・認可の設計 → [authentication.md](authentication.md)
+- 実機で何が起きて、どう判断したか → [decision-log.md](decision-log.md)
 - 各コンポーネントの使い方 → `server/README.md`, `client/README.md`, `ios-app/README.md`
 - 配備後の作業（子アカウントの追加・削除）→ `server/README.md` の「運用」
 

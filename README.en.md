@@ -174,6 +174,7 @@ Locally, `npm install && npm run dev` brings up the Worker, a local D1, and a
 | [docs/architecture-decisions.md](docs/architecture-decisions.md) | Decisions and the options that were rejected (ADR-1 to 6) — Japanese |
 | [docs/authentication.md](docs/authentication.md) | Auth and authorisation design — Japanese |
 | [docs/implementation-status.md](docs/implementation-status.md) | Status, on-device verification results, open work — Japanese |
+| [docs/decision-log.md](docs/decision-log.md) | What actually happened on the device and how each call was made, including the ones that turned out wrong — Japanese |
 | [docs/getting-started.en.md](docs/getting-started.en.md) | Development setup and deployment |
 | [CLAUDE.md](CLAUDE.md) | The specification, and the guidance Claude Code follows — Japanese |
 | [server/README.md](server/README.md) | Cloudflare-side setup and operations — Japanese |

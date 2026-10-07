@@ -161,6 +161,7 @@ OS がアプリを凍結し、走行中は 30 分間隔の点しか残らず、�
 | [docs/architecture-decisions.md](docs/architecture-decisions.md) | 構成上の判断と、選ばなかった案の理由（ADR-1〜6） |
 | [docs/authentication.md](docs/authentication.md) | 親端末と子アカウントの認証・認可の設計 |
 | [docs/implementation-status.md](docs/implementation-status.md) | 実装状況、実機での検証結果、残課題 |
+| [docs/decision-log.md](docs/decision-log.md) | 実機で何が起きて、どう判断したか。外した判断も残してある |
 | [docs/getting-started.md](docs/getting-started.md) | 開発環境の構築と配備手順 |
 | [CLAUDE.md](CLAUDE.md) | 仕様書。Claude Code が実装を進める際の指針 |
 | [server/README.md](server/README.md) | Cloudflare 側のセットアップと運用 |
