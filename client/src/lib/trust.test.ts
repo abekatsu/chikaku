@@ -10,8 +10,16 @@ import {
 } from "./trust";
 
 /**
- * 数字はすべて本番データから取っている (Issue #16 の分析)。
+ * 精度の値と点の並びは本番データから取っている (Issue #16 の分析)。
  * ここを「それらしい値」に書き換えると、実機で起きたことを再現しなくなる。
+ *
+ * **座標そのものは架空の位置に置き換えてある。** 元データは実在の住居で、
+ * 小数第 6 位まで書くと 0.1m まで特定できてしまう。このリポジトリは公開する。
+ * 置き換えにあたって **点と点の距離は実測どおりに保ってある**（33km の跳び、
+ * 57m の揺れ、158m の離れなど）。判定が見ているのは距離と精度の値だけなので、
+ * テストの意味は変わらない。**実データの座標に戻さないこと。**
+ *
+ * 基準点はこのリポジトリが他のテストでも使っている東京駅。
  */
 
 const fix = (lat: number, lng: number, accuracy: number, source: TrustInput["source"] = null) => ({
@@ -20,6 +28,9 @@ const fix = (lat: number, lng: number, accuracy: number, source: TrustInput["sou
   accuracy,
   source,
 });
+
+/** 静止中の端末が繰り返し返す位置。実データでは居住地だった。 */
+const STATIONARY = { lat: 35.6812, lng: 139.7671 };
 
 describe("looksDatabaseAccuracy", () => {
   it("実データに出た離散値は全部拾う", () => {
@@ -44,39 +55,39 @@ describe("looksDatabaseAccuracy", () => {
 });
 
 describe("isSpike — 2026-09-03 15:41:58 に 33km 跳んだ点", () => {
-  // 15:26:15 実際の位置 → 15:41:58 33km 先 → 15:43:46 元の位置
+  // 15:26:15 実際の位置 → 15:41:58 33km 先 → 15:43:46 元の位置（57m 以内）
   const before = fix(35.80696, 139.86663, 7.3);
-  const tokyo = fix(35.72611, 139.51218, 56.1);
+  const away = fix(35.72611, 139.51218, 56.1);
   const after = fix(35.8066, 139.86618, 3.8);
 
   it("accuracy 56.1 は離散値ではないので、誤差の形では拾えない", () => {
-    expect(looksDatabaseAccuracy(tokyo.accuracy)).toBe(false);
+    expect(looksDatabaseAccuracy(away.accuracy)).toBe(false);
   });
 
   it("前後を見れば拾える", () => {
-    expect(distanceMeters(before, tokyo)).toBeGreaterThan(30_000);
+    expect(distanceMeters(before, away)).toBeGreaterThan(30_000);
     expect(distanceMeters(before, after)).toBeLessThan(100);
-    expect(isSpike(before, tokyo, after)).toBe(true);
+    expect(isSpike(before, away, after)).toBe(true);
   });
 
   it("前後の点自身はスパイクではない", () => {
-    expect(isSpike(undefined, before, tokyo)).toBe(false);
-    expect(isSpike(tokyo, after, undefined)).toBe(false);
+    expect(isSpike(undefined, before, away)).toBe(false);
+    expect(isSpike(away, after, undefined)).toBe(false);
   });
 
   it("前後どちらかが無ければ判定しない（最新位置ではこの理由で疑えない）", () => {
-    expect(isSpike(before, tokyo, undefined)).toBe(false);
-    expect(isSpike(undefined, tokyo, after)).toBe(false);
+    expect(isSpike(before, away, undefined)).toBe(false);
+    expect(isSpike(undefined, away, after)).toBe(false);
   });
 });
 
 describe("isSpike — 本当に遠くへ行った場合は拾わない", () => {
   it("行って戻らない移動はスパイクではない", () => {
     // 前後の点同士が離れていれば、本人が動いたということ。
-    const home = fix(35.6812, 139.7671, 15);
+    const start = fix(STATIONARY.lat, STATIONARY.lng, 15);
     const midway = fix(35.8609, 139.9164, 12);
     const far = fix(36.292, 140.243, 10);
-    expect(isSpike(home, midway, far)).toBe(false);
+    expect(isSpike(start, midway, far)).toBe(false);
   });
 });
 
@@ -91,8 +102,8 @@ describe("distrustReason", () => {
 
   it("静止中に最もよく記録される点は、network 測位だが信じてよい", () => {
     // 精度 22.5 は network プロバイダの出力と一致した。場所としては正しい。
-    expect(distrustReason(fix(35.6812, 139.7671, 22.5, "satellite"))).toBeNull();
-    expect(distrustReason(fix(35.6812, 139.7671, 22.5, null))).toBeNull();
+    expect(distrustReason(fix(STATIONARY.lat, STATIONARY.lng, 22.5, "satellite"))).toBeNull();
+    expect(distrustReason(fix(STATIONARY.lat, STATIONARY.lng, 22.5, null))).toBeNull();
   });
 
   it("自己申告の satellite は、誤差の形が離散値なら信じない", () => {
@@ -125,9 +136,10 @@ describe("trustedHistory", () => {
 
   it("離散値の精度はスパイクでなくても疑う", () => {
     const history = [
-      fix(35.6812, 139.7671, 22.5),
-      fix(35.682206, 139.768339, 300), // 158m しか離れておらず場所は大きく外れていないが、形は database
-      fix(35.6812, 139.7671, 26.4),
+      fix(STATIONARY.lat, STATIONARY.lng, 22.5),
+      // 158m しか離れておらず場所は大きく外れていないが、形は database
+      fix(35.682206, 139.768339, 300),
+      fix(STATIONARY.lat, STATIONARY.lng, 26.4),
     ];
     expect(trustedHistory(history)).toEqual([true, false, true]);
   });
