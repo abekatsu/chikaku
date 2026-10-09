@@ -1,3 +1,5 @@
+*[English](architecture-decisions.en.md)*
+
 # アーキテクチャ決定記録 (ADR)
 
 CLAUDE.md §8「未確定事項」として残されていた項目を含む、構成上の判断とその理由。
