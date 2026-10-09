@@ -6,3 +6,7 @@ node_modules/
 # Cloudflare の実値（アカウント固有）。雛形は wrangler.jsonc.example。
 # 秘密ではないが、リポジトリを汎用的に使えるようにするため追跡しない。
 /wrangler.jsonc
+
+# 公開してはいけない既知の値の一覧。中身そのものが機微なので追跡しない。
+# 雛形は .private-patterns.example。
+/.private-patterns

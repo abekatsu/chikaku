@@ -20,6 +20,8 @@ import {
  * テストの意味は変わらない。**実データの座標に戻さないこと。**
  *
  * 基準点はこのリポジトリが他のテストでも使っている東京駅。
+ *
+ * check-private: synthetic
  */
 
 const fix = (lat: number, lng: number, accuracy: number, source: TrustInput["source"] = null) => ({

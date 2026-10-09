@@ -105,6 +105,7 @@ print("位置送信")
 let now = Date()
 
 @MainActor
+    // 東京駅。check-private: synthetic
 func payload(
     lat: Double = 35.681236,
     lng: Double = 139.767125,

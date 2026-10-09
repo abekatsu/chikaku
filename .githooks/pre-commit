@@ -1,0 +1,10 @@
+#!/usr/bin/env sh
+# 公開してはいけない値が staged に混ざっていないか調べる。
+# 仕組みと理由は scripts/check-private.py の冒頭を参照。
+#
+# 有効化（clone ごとに1回）:
+#   git config core.hooksPath .githooks
+#
+# 誤検知で止まったときは git commit --no-verify で越えられる。
+# 越える前に、本当に誤検知か確かめること。
+exec python3 "$(git rev-parse --show-toplevel)/scripts/check-private.py" --staged
