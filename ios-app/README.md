@@ -1,3 +1,5 @@
+*[English](README.en.md)*
+
 # みまもり — iPhone アプリ（親側）
 
 親の iPhone で位置の変化を検知し、変わったときだけサーバーへ送る。

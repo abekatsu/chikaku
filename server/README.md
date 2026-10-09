@@ -1,3 +1,5 @@
+*[English](README.en.md)*
+
 # chikaku-server
 
 高齢者見守り位置情報システムのバックエンド（CLAUDE.md §3）。
@@ -171,7 +173,7 @@ npx wrangler d1 execute chikaku --remote --command "
 
 追加した人は既存の子アカウントと**完全に同等**になる。位置の閲覧だけでなく、
 招待コードの発行と端末の無効化もできる。「見るだけ」の権限は実装していない
-（[`docs/implementation-status.md`](../docs/implementation-status.md) §8）。
+（[`docs/implementation-status.md`](../docs/implementation-status.md) §9）。
 
 ### 子アカウントを削除する
 
@@ -278,7 +280,7 @@ WAF の Rate Limiting Rules はゾーン配下の機能で、独自ドメイン�
 （長期圏外から復帰した端末のキュー掃き出しを絞ってしまうため）。
 カウンタは Cloudflare のロケーション単位なので、接続を分散されれば
 設定値は超えられる。**速度制限であって試行回数の上限ではない。**
-詳細は [`docs/implementation-status.md` §4.5](../docs/implementation-status.md)。
+詳細は [`docs/implementation-status.md` §5.5](../docs/implementation-status.md)。
 
 **招待コードの引き換えは行数で判定する。**
 D1 の `batch` は SQL トランザクションだが、ロールバックされるのは文が

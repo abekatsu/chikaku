@@ -1,3 +1,5 @@
+*[English](README.en.md)*
+
 # chikaku-client
 
 子側の見守りダッシュボード（CLAUDE.md §4）。

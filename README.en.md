@@ -171,13 +171,13 @@ Locally, `npm install && npm run dev` brings up the Worker, a local D1, and a
 
 | | |
 |---|---|
-| [docs/architecture-decisions.md](docs/architecture-decisions.md) | Decisions and the options that were rejected (ADR-1 to 6) — Japanese |
-| [docs/authentication.md](docs/authentication.md) | Auth and authorisation design — Japanese |
-| [docs/implementation-status.md](docs/implementation-status.md) | Status, on-device verification results, open work — Japanese |
-| [docs/decision-log.md](docs/decision-log.md) | What actually happened on the device and how each call was made, including the ones that turned out wrong — Japanese |
+| [docs/architecture-decisions.en.md](docs/architecture-decisions.en.md) | Decisions and the options that were rejected (ADR-1 to 6) |
+| [docs/authentication.en.md](docs/authentication.en.md) | Auth and authorisation design |
+| [docs/implementation-status.en.md](docs/implementation-status.en.md) | Status, on-device verification results, open work |
+| [docs/decision-log.en.md](docs/decision-log.en.md) | What actually happened on the device and how each call was made, including the ones that turned out wrong |
 | [docs/getting-started.en.md](docs/getting-started.en.md) | Development setup and deployment |
 | [CLAUDE.md](CLAUDE.md) | The specification, and the guidance Claude Code follows — Japanese |
-| [server/README.md](server/README.md) | Cloudflare-side setup and operations — Japanese |
+| [server/README.en.md](server/README.en.md) | Cloudflare-side setup and operations |
 
 ## Built with Claude Code
 
