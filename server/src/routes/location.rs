@@ -124,8 +124,10 @@ pub async fn create(
                 .prepare(
                     "INSERT OR IGNORE INTO location_events \
                      (device_id, family_id, lat, lng, accuracy, recorded_at, received_at, battery_level, \
-                      source_kind, source_provider, source_has_altitude, source_has_speed, source_has_bearing) \
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+                      source_kind, source_provider, source_has_altitude, source_has_speed, source_has_bearing, \
+                      source_has_vertical_accuracy, source_has_speed_accuracy, source_has_bearing_accuracy, \
+                      source_has_msl_altitude, source_age_millis, source_extra_keys, source_satellites) \
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)",
                 )
                 .bind(&[
                     db::text(&auth.device_id),
@@ -142,6 +144,17 @@ pub async fn create(
                     db::opt_flag(req.source.as_ref().map(|s| s.has_altitude)),
                     db::opt_flag(req.source.as_ref().map(|s| s.has_speed)),
                     db::opt_flag(req.source.as_ref().map(|s| s.has_bearing)),
+                    // Issue #16 の判断材料。**行ごとに欠けうる** -- 古いアプリは
+                    // 送ってこず、API 34 未満の端末は標高だけ報告できない。
+                    // `flatten` で「source ごと無い」と「その項目だけ無い」を
+                    // 同じ NULL に畳む。どちらも「報告が無い」で意味は同じ。
+                    db::opt_flag(req.source.as_ref().and_then(|s| s.has_vertical_accuracy)),
+                    db::opt_flag(req.source.as_ref().and_then(|s| s.has_speed_accuracy)),
+                    db::opt_flag(req.source.as_ref().and_then(|s| s.has_bearing_accuracy)),
+                    db::opt_flag(req.source.as_ref().and_then(|s| s.has_msl_altitude)),
+                    db::opt_num(req.source.as_ref().and_then(|s| s.age_millis)),
+                    db::opt_text(req.source.as_ref().and_then(|s| s.extra_keys.as_deref())),
+                    db::opt_num(req.source.as_ref().and_then(|s| s.satellites)),
                 ])?,
             touch_device,
         ],

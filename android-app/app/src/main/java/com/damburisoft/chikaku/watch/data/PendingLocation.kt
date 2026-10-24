@@ -29,6 +29,18 @@ data class PendingLocation(
     val hasAltitude: Boolean? = null,
     val hasSpeed: Boolean? = null,
     val hasBearing: Boolean? = null,
+    /**
+     * #13 の判定材料が実機で役に立たなかったため足したぶん (Issue #16)。
+     * 何を選んだかと理由は [com.damburisoft.chikaku.watch.location.LocationEvidence]。
+     */
+    val hasVerticalAccuracy: Boolean? = null,
+    val hasSpeedAccuracy: Boolean? = null,
+    val hasBearingAccuracy: Boolean? = null,
+    /** API 34 未満では判定できない。null は「無い」ではなく「分からない」。 */
+    val hasMslAltitude: Boolean? = null,
+    val ageMillis: Long? = null,
+    val extraKeys: String? = null,
+    val satellites: Int? = null,
     /** 送信を試みて失敗した回数。増えすぎたものは捨てる。 */
     val attempts: Int = 0,
 )

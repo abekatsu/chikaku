@@ -46,6 +46,29 @@ export interface Fix {
 export type LocationSourceKind = "satellite" | "network" | "unknown";
 
 /**
+ * 端末が報告してくる、出どころの判断材料 (Issue #16)。
+ *
+ * **画面はまだこれを使っていない。** `lib/trust.ts` のとおり、表示の根拠は
+ * 精度の申告の形と前後の点との関係に移してある。ここにあるのは、実機で
+ * 何が残るかを見てから次の判定を決めるための生データ。
+ *
+ * すべて省略可。**欠けているのは「無い」ではなく「報告が無い」。**
+ * 古いアプリ、iOS 版、API 34 未満の端末（`has_msl_altitude` のみ）が該当する。
+ */
+export interface LocationEvidence {
+  has_vertical_accuracy?: boolean | null;
+  has_speed_accuracy?: boolean | null;
+  has_bearing_accuracy?: boolean | null;
+  has_msl_altitude?: boolean | null;
+  /** 測位されてから端末のキューに入るまでの経過時間（ミリ秒） */
+  age_millis?: number | null;
+  /** extras のキー名を整列して連結したもの。値は含まれない */
+  extra_keys?: string | null;
+  /** extras の衛星数。融合結果に残っていれば決定打になりうる */
+  satellites?: number | null;
+}
+
+/**
  * 親端末の設定のうち、見守りの成否を左右するもの（Issue #4）。
  * 端末が位置情報と一緒に報告する。
  */

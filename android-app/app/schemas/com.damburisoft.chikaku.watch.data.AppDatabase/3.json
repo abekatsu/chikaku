@@ -1,0 +1,122 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 3,
+    "identityHash": "d3009f822026bac1b05b85a1c324a9bc",
+    "entities": [
+      {
+        "tableName": "pending_locations",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `lat` REAL NOT NULL, `lng` REAL NOT NULL, `accuracy` REAL NOT NULL, `recordedAt` INTEGER NOT NULL, `batteryLevel` INTEGER NOT NULL, `provider` TEXT, `hasAltitude` INTEGER, `hasSpeed` INTEGER, `hasBearing` INTEGER, `hasVerticalAccuracy` INTEGER, `hasSpeedAccuracy` INTEGER, `hasBearingAccuracy` INTEGER, `hasMslAltitude` INTEGER, `ageMillis` INTEGER, `extraKeys` TEXT, `satellites` INTEGER, `attempts` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lat",
+            "columnName": "lat",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lng",
+            "columnName": "lng",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "accuracy",
+            "columnName": "accuracy",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "recordedAt",
+            "columnName": "recordedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "batteryLevel",
+            "columnName": "batteryLevel",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "provider",
+            "columnName": "provider",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "hasAltitude",
+            "columnName": "hasAltitude",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "hasSpeed",
+            "columnName": "hasSpeed",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "hasBearing",
+            "columnName": "hasBearing",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "hasVerticalAccuracy",
+            "columnName": "hasVerticalAccuracy",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "hasSpeedAccuracy",
+            "columnName": "hasSpeedAccuracy",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "hasBearingAccuracy",
+            "columnName": "hasBearingAccuracy",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "hasMslAltitude",
+            "columnName": "hasMslAltitude",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "ageMillis",
+            "columnName": "ageMillis",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "extraKeys",
+            "columnName": "extraKeys",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "satellites",
+            "columnName": "satellites",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "attempts",
+            "columnName": "attempts",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        }
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'd3009f822026bac1b05b85a1c324a9bc')"
+    ]
+  }
+}

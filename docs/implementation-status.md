@@ -360,6 +360,15 @@ Wi-Fi 測位が返すのは**アクセスポイントがデータベースに登
 | `source_provider` | `getProvider()` の値。融合済みだと `fused` としか返らないことがある |
 | `source_has_altitude` / `_has_speed` / `_has_bearing` | 判定の根拠になった生の値 |
 
+**判断材料を入れ替えた (Issue #16)。** 下の表に加えて
+`source_has_vertical_accuracy` / `_has_speed_accuracy` / `_has_bearing_accuracy` /
+`_has_msl_altitude` / `_age_millis` / `_extra_keys` / `_satellites` を記録している
+（マイグレーション 0004）。**判定はまだ作っていない。** 何を選んだかと理由は
+`LocationEvidence` に書いてある。実機の `dumpsys location` では速度・方位の「精度」と
+extras の衛星情報だけが gps 側にしか無かったが、**それはプロバイダの出力であって
+アプリが受け取る融合結果ではない。** 融合を通って残るかどうかは実機で見るまで
+分からないので、期待の薄いものも含めて全部記録している。
+
 **この判定は実機で外れた (Issue #16)。** 「衛星測位は高度を伴い、Wi-Fi / 基地局測位は
 高度を出せない」という前提で組んだが、実機の network プロバイダは
 `supports=[altitude]` を宣言し、高度・鉛直精度・標高をすべて付けて返してくる。
@@ -970,10 +979,30 @@ Issue #2 の目的（「送られてこない」のが静止なのか異常な�
 
   8/30 16:37〜16:50 の 4 点（GPS の点から 3.4〜3.6km）は誤りかどうか未確認。
 
-- **端末側の記録項目の入れ替えは未着手 (Issue #16 の B)。** `hasSpeedAccuracy` /
-  `hasBearingAccuracy` / extras のキー一覧 / `elapsedRealtimeAgeMillis` に替える案。
-  GPS 由来の fused 出力に `satellites` が残るなら決定打になるが、残るかどうかは
-  実機で見るまで分からない。表示は §6.1 で直っているので急がない。
+- **端末側の記録項目は入れ替えたが、実機のデータがまだ無い (Issue #16 の B)。**
+  `hasVerticalAccuracy` / `hasSpeedAccuracy` / `hasBearingAccuracy` /
+  `hasMslAltitude` / 経過時間 / extras のキー一覧 / `satellites` を記録する
+  ようにした（§3.7、マイグレーション 0004）。**判定は意図的に作っていない。**
+  見るべきは次の 2 点。
+
+  ```sql
+  -- 1. 融合結果に extras が残るか。残れば satellites が決定打になる
+  SELECT source_extra_keys, COUNT(*), SUM(source_satellites IS NOT NULL)
+  FROM location_events WHERE source_extra_keys IS NOT NULL
+  GROUP BY source_extra_keys;
+
+  -- 2. 速度・方位の「精度」が、精度の形（§6.1）と一致するか
+  SELECT source_has_speed_accuracy, source_has_bearing_accuracy,
+         CAST(accuracy AS INT) = accuracy AND CAST(accuracy AS INT) % 100 = 0 AS looks_db,
+         COUNT(*), ROUND(AVG(accuracy), 1)
+  FROM location_events WHERE source_has_speed_accuracy IS NOT NULL
+  GROUP BY 1, 2, 3;
+  ```
+
+  2 で一致すれば、端末側だけで §6.1 と同じ判定ができることになる
+  （いまは前後の点が要るため最新位置に効かない）。**一致しなければ、
+  その材料も捨てる。** #13 と #16 で二度外しているので、データを見るまで
+  決めない。
 
 - **`PRIORITY_HIGH_ACCURACY` の電池への影響は実測した。悪化していない (Issue #13)。**
 

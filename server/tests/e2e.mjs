@@ -340,6 +340,58 @@ test("測位の出どころが latest と history に出る", async () => {
   assertEqual(history.body.events[0].source, "network");
 });
 
+test("判断材料を全部付けても受理され、D1 に入る（Issue #16）", async () => {
+  // **列名を間違えると INSERT が落ちる。** 既存のテストは source の新しい項目を
+  // 一度も送らないので、0004 で足した列は素通りしていた。実際に送って
+  // 202 が返ることで、SQL の列名とプレースホルダの数が合っていると分かる。
+  const family = await seedFamily("evidence@example.com");
+  const { deviceId, deviceToken } = await pairDevice(family.familyId, family.jwt);
+
+  const post = await api("POST", "/location", {
+    bearer: deviceToken,
+    body: fix(deviceId, iso(Date.now()), {
+      source: {
+        kind: "satellite",
+        provider: "fused",
+        has_altitude: true,
+        has_speed: true,
+        has_bearing: true,
+        has_vertical_accuracy: true,
+        has_speed_accuracy: true,
+        has_bearing_accuracy: true,
+        has_msl_altitude: true,
+        age_millis: 1234,
+        extra_keys: "maxCn0,meanCn0,satellites",
+        satellites: 11,
+      },
+    }),
+  });
+  assertEqual(post.status, 202, JSON.stringify(post.body));
+  assertEqual(post.body.stored, true);
+});
+
+test("判断材料は一部だけでも受理される（API 34 未満や旧アプリ）", async () => {
+  // 標高は API 34 以降でしか判定できず、古いアプリは新しい項目を一切送らない。
+  // **揃っていないと弾く作りにすると、そういう端末の位置がまるごと落ちる。**
+  const family = await seedFamily("partialevidence@example.com");
+  const { deviceId, deviceToken } = await pairDevice(family.familyId, family.jwt);
+
+  const post = await api("POST", "/location", {
+    bearer: deviceToken,
+    body: fix(deviceId, iso(Date.now()), {
+      source: {
+        kind: "unknown",
+        has_altitude: true,
+        has_speed: false,
+        has_bearing: false,
+        has_speed_accuracy: false,
+        // has_msl_altitude / satellites / extra_keys は無い
+      },
+    }),
+  });
+  assertEqual(post.status, 202, JSON.stringify(post.body));
+});
+
 test("出どころを報告しない端末では null になる（network ではない）", async () => {
   // **未報告を network に倒すと、iOS 版と旧アプリの測位が全部
   // 「おおよその位置」として表示される。** 第三の状態として区別する。

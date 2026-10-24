@@ -45,6 +45,16 @@ pub fn opt_flag(v: Option<bool>) -> JsValue {
     }
 }
 
+/// 省略可能な数値。**None は 0 ではなく NULL。**
+/// `opt_flag` と同じ理由で、「報告が無い」を「0 件」に化けさせないため
+/// （衛星数 0 と未報告はまったく違う意味になる。Issue #16）。
+pub fn opt_num(v: Option<i64>) -> JsValue {
+    match v {
+        Some(n) => num(n),
+        None => JsValue::NULL,
+    }
+}
+
 /// 1 行だけ取る。行が無ければ `None`。
 pub async fn first<T: DeserializeOwned>(
     db: &D1Database,
