@@ -735,7 +735,7 @@ D1 and wasm specifics. Hard to diagnose from the symptom, so recorded here.
 | **`batch` only rolls back on a statement failure**, not on zero rows updated | Invite redemption uses a conditional INSERT plus an UPDATE guarded by EXISTS, and counts as successful only when both affect one row |
 | `getrandom` does not work on wasm | `wasm_js` feature plus the cfg in `.cargo/config.toml` |
 | `serde_wasm_bindgen` produces a JS Map | The JWK handed to SubtleCrypto is built with `JSON.parse` to get a plain object |
-| wrangler 4 needs Node 22+ | Pinned in `.tool-versions` |
+| wrangler 4 needs Node 22+ | Pinned to 26 LTS in `.tool-versions` |
 
 ### 5.5 Rate limiting
 

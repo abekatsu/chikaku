@@ -6,7 +6,7 @@
 
 | | |
 |---|---|
-| Node.js | **22 or newer** (required by wrangler 4). Pinned in `.tool-versions` |
+| Node.js | **22 or newer** (required by wrangler 4). Pinned to **26 LTS** in `.tool-versions` |
 | Rust | `rustup target add wasm32-unknown-unknown` |
 | worker-build | `cargo install worker-build` (0.8.1 or newer) |
 | JDK | **17 or newer**, for the Android app (the JBR bundled with Android Studio works) |

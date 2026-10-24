@@ -653,7 +653,7 @@ D1 と wasm 固有の落とし穴。ハマると原因が見えにくいので�
 | **`batch` は文の失敗でしかロールバックしない**（更新0行では起きない） | 招待コードの引き換えを条件付き INSERT + EXISTS 付き UPDATE にし、両方が1行のときだけ成立とみなす |
 | `getrandom` が wasm で動かない | `wasm_js` フィーチャ + `.cargo/config.toml` で cfg 指定 |
 | `serde_wasm_bindgen` は JS の Map を作る | SubtleCrypto に渡す JWK は `JSON.parse` で素のオブジェクトにする |
-| wrangler 4 は Node 22 以上 | `.tool-versions` で固定 |
+| wrangler 4 は Node 22 以上 | `.tool-versions` で 26 LTS に固定 |
 
 ### 5.5 レート制限
 

@@ -23,7 +23,7 @@ FCM push notifications are not implemented (phase 2).
 
 | | |
 |---|---|
-| Node.js | **22 or later** (wrangler 4 requires it). Pinned in `.tool-versions` at the repository root |
+| Node.js | **22 or later** (wrangler 4 requires it). Pinned to **26 LTS** in `.tool-versions` at the repository root |
 | Rust | `rustup target add wasm32-unknown-unknown` |
 | worker-build | `cargo install worker-build` (0.8.1 or later) |
 

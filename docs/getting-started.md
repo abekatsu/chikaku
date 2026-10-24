@@ -6,7 +6,7 @@
 
 | | |
 |---|---|
-| Node.js | **22 以上**（wrangler 4 の要求）。`.tool-versions` で固定済み |
+| Node.js | **22 以上**（wrangler 4 の要求）。`.tool-versions` で **26 LTS** に固定済み |
 | Rust | `rustup target add wasm32-unknown-unknown` |
 | worker-build | `cargo install worker-build`（0.8.1 以上） |
 | JDK | **17 以上**（Android アプリ。Android Studio 同梱の JBR でもよい） |

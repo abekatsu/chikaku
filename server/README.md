@@ -19,7 +19,7 @@ FCM プッシュ通知は未実装（フェーズ2）。
 
 | | |
 |---|---|
-| Node.js | **22 以上**（wrangler 4 の要求）。リポジトリ直下の `.tool-versions` で固定済み |
+| Node.js | **22 以上**（wrangler 4 の要求）。リポジトリ直下の `.tool-versions` で **26 LTS** に固定済み |
 | Rust | `rustup target add wasm32-unknown-unknown` |
 | worker-build | `cargo install worker-build`（0.8.1 以上） |
 

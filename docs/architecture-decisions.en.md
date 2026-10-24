@@ -254,8 +254,10 @@ easier — at the cost of discarding the Rust implementation.
 - WASM has a lot of sharp edges. The table above is a record of the ones
   actually hit.
 - The build needs `worker-build` and the wasm32 target.
-- **wrangler 4 requires Node.js 22 or later.** Pinned to the 22 series in
-  `.tool-versions` at the repository root.
+- **wrangler 4 requires Node.js 22 or later.** Pinned to the **26 series
+  (Active LTS)** in `.tool-versions` at the repository root. The 22 and 24
+  lines are both in maintenance, so moving to either would mean making the
+  same decision again within a year.
 
 ---
 
