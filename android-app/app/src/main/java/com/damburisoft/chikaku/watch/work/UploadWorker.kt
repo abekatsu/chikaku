@@ -111,11 +111,24 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         val speed = hasSpeed ?: return null
         val bearing = hasBearing ?: return null
         return LocationSourceReport(
+            // **この判定は実機で外れている (Issue #16)。** 置き換えの材料を集めて
+            // いる最中なので、互換のためそのまま送り続けるだけ。ダッシュボードは
+            // 既にこれを根拠にしていない（`client/src/lib/trust.ts`）。
             kind = LocationSource.classify(altitude, speed, bearing).wireValue,
             provider = provider,
             hasAltitude = altitude,
             hasSpeed = speed,
             hasBearing = bearing,
+            // 以下は #16 で足したぶん。**行ごとに欠けうる**ので、上の 3 つのように
+            // 揃って無ければ諦めるのではなく、取れたものだけ送る。更新をまたいで
+            // キューに残った行は古い列しか持たない。
+            hasVerticalAccuracy = hasVerticalAccuracy,
+            hasSpeedAccuracy = hasSpeedAccuracy,
+            hasBearingAccuracy = hasBearingAccuracy,
+            hasMslAltitude = hasMslAltitude,
+            ageMillis = ageMillis,
+            extraKeys = extraKeys,
+            satellites = satellites,
         )
     }
 

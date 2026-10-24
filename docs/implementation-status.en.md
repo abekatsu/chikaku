@@ -403,6 +403,16 @@ So **the origin itself is recorded.**
 | `source_provider` | The `getProvider()` value, which may be no more than `fused` |
 | `source_has_altitude` / `_has_speed` / `_has_bearing` | The raw values the classification rested on |
 
+**The evidence has been replaced (Issue #16).** Alongside the table below,
+`source_has_vertical_accuracy`, `_has_speed_accuracy`, `_has_bearing_accuracy`,
+`_has_msl_altitude`, `_age_millis`, `_extra_keys` and `_satellites` are now
+recorded (migration 0004). **No new classification has been written.** What was
+chosen and why is in `LocationEvidence`. On the device, `dumpsys location`
+showed that only the speed and bearing *accuracies* and the GNSS extras were
+exclusive to gps — but **that is the provider's output, not what the app
+receives.** Whether any of it survives the fusion can only be seen on hardware,
+so everything is recorded, including the fields not expected to help.
+
 **This classification turned out to be wrong on hardware (Issue #16).** It was
 built on the premise that satellite fixes carry altitude and Wi-Fi/cell fixes
 cannot produce one, but the device's network provider declares
@@ -1084,12 +1094,30 @@ the child's side the parent jumps 600 m and comes back.
   The four points between 16:37 and 16:50 on 8/30 — 3.4–3.6 km from the
   nearest GPS fix — have not been confirmed either way.
 
-- **Replacing what the app records has not been started (option B in #16).**
-  The plan is to swap to `hasSpeedAccuracy`, `hasBearingAccuracy`, the list of
-  keys in extras, and `elapsedRealtimeAgeMillis`. If `satellites` survives in
-  GPS-derived fused output it would be decisive, but whether it does cannot be
-  known without a device. The display is already corrected by §6.1, so this is
-  not urgent.
+- **What the app records has been replaced, but there is no device data yet
+  (option B in #16).** `hasVerticalAccuracy`, `hasSpeedAccuracy`,
+  `hasBearingAccuracy`, `hasMslAltitude`, the fix's age, the list of keys in
+  extras and `satellites` are now recorded (§3.7, migration 0004). **No
+  classification has been written, deliberately.** Two things to look at:
+
+  ```sql
+  -- 1. Do extras survive the fusion? If so, satellites is decisive
+  SELECT source_extra_keys, COUNT(*), SUM(source_satellites IS NOT NULL)
+  FROM location_events WHERE source_extra_keys IS NOT NULL
+  GROUP BY source_extra_keys;
+
+  -- 2. Do the speed/bearing accuracies agree with the accuracy shape (§6.1)?
+  SELECT source_has_speed_accuracy, source_has_bearing_accuracy,
+         CAST(accuracy AS INT) = accuracy AND CAST(accuracy AS INT) % 100 = 0 AS looks_db,
+         COUNT(*), ROUND(AVG(accuracy), 1)
+  FROM location_events WHERE source_has_speed_accuracy IS NOT NULL
+  GROUP BY 1, 2, 3;
+  ```
+
+  If 2 agrees, the device alone could make the same judgement as §6.1 — which
+  today needs both neighbours and so cannot apply to the latest position.
+  **If it does not agree, that evidence gets discarded too.** This judgement
+  has now been wrong twice, so nothing is decided before the data arrives.
 
 - **The battery impact of `PRIORITY_HIGH_ACCURACY` has been measured. There is
   no regression (Issue #13).**

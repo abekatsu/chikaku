@@ -53,6 +53,18 @@ data class LocationSourceReport(
     @SerialName("has_altitude") val hasAltitude: Boolean,
     @SerialName("has_speed") val hasSpeed: Boolean,
     @SerialName("has_bearing") val hasBearing: Boolean,
+    /**
+     * ここから下は #16 で足した判断材料。**まだ判定には使っていない。**
+     * 実機で何が残るかを見てから決める（`LocationEvidence` を参照）。
+     * 古いアプリは送ってこないため、サーバー側では省略可。
+     */
+    @SerialName("has_vertical_accuracy") val hasVerticalAccuracy: Boolean? = null,
+    @SerialName("has_speed_accuracy") val hasSpeedAccuracy: Boolean? = null,
+    @SerialName("has_bearing_accuracy") val hasBearingAccuracy: Boolean? = null,
+    @SerialName("has_msl_altitude") val hasMslAltitude: Boolean? = null,
+    @SerialName("age_millis") val ageMillis: Long? = null,
+    @SerialName("extra_keys") val extraKeys: String? = null,
+    val satellites: Int? = null,
 )
 
 @Serializable

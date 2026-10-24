@@ -7,7 +7,7 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [PendingLocation::class], version = 2, exportSchema = true)
+@Database(entities = [PendingLocation::class], version = 3, exportSchema = true)
 abstract class AppDatabase : RoomDatabase() {
 
     abstract fun pendingLocationDao(): PendingLocationDao
@@ -22,7 +22,7 @@ abstract class AppDatabase : RoomDatabase() {
          */
         fun create(context: Context): AppDatabase =
             Room.databaseBuilder(context, AppDatabase::class.java, NAME)
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .build()
 
         /**
@@ -41,6 +41,28 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE pending_locations ADD COLUMN hasAltitude INTEGER")
                 db.execSQL("ALTER TABLE pending_locations ADD COLUMN hasSpeed INTEGER")
                 db.execSQL("ALTER TABLE pending_locations ADD COLUMN hasBearing INTEGER")
+            }
+        }
+
+        /**
+         * 出どころの判断材料を入れ替える (Issue #16)。
+         *
+         * 1_2 で足した高度・速度・方位は、実機ではどれも出どころを区別しなかった
+         * （network プロバイダが高度も鉛直精度も標高も返してくる）。代わりの
+         * 候補を記録するための列で、**判定そのものはまだ変えていない。**
+         * 何を選んだかと理由は `LocationEvidence` を参照。
+         *
+         * 1_2 と同じく nullable のまま足し、既存行は埋めない。
+         */
+        internal val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE pending_locations ADD COLUMN hasVerticalAccuracy INTEGER")
+                db.execSQL("ALTER TABLE pending_locations ADD COLUMN hasSpeedAccuracy INTEGER")
+                db.execSQL("ALTER TABLE pending_locations ADD COLUMN hasBearingAccuracy INTEGER")
+                db.execSQL("ALTER TABLE pending_locations ADD COLUMN hasMslAltitude INTEGER")
+                db.execSQL("ALTER TABLE pending_locations ADD COLUMN ageMillis INTEGER")
+                db.execSQL("ALTER TABLE pending_locations ADD COLUMN extraKeys TEXT")
+                db.execSQL("ALTER TABLE pending_locations ADD COLUMN satellites INTEGER")
             }
         }
     }

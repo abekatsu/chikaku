@@ -34,4 +34,22 @@ pub struct LocationSource {
     pub has_altitude: bool,
     pub has_speed: bool,
     pub has_bearing: bool,
+    /// ここから下は Issue #16 で足した判断材料。**まだ判定には使っていない。**
+    /// 古いアプリと iOS 版は送ってこないため省略可。
+    /// `None` は「無い」ではなく「報告が無い」。
+    #[serde(default)]
+    pub has_vertical_accuracy: Option<bool>,
+    #[serde(default)]
+    pub has_speed_accuracy: Option<bool>,
+    #[serde(default)]
+    pub has_bearing_accuracy: Option<bool>,
+    /// API 34 未満の端末では判定できないため、報告があっても `None` がありうる。
+    #[serde(default)]
+    pub has_msl_altitude: Option<bool>,
+    #[serde(default)]
+    pub age_millis: Option<i64>,
+    #[serde(default)]
+    pub extra_keys: Option<String>,
+    #[serde(default)]
+    pub satellites: Option<i64>,
 }

@@ -35,6 +35,9 @@ class LocationRepository(
         }
         if (!force && !shouldSend(location, now)) return false
 
+        // 判断材料はここで一度だけ写し取る。測位結果から読む値が増えたため
+        // （Issue #16）、散らばらないよう 1 か所にまとめてある。
+        val evidence = LocationEvidence.of(location)
         dao.insert(
             PendingLocation(
                 lat = location.latitude,
@@ -43,11 +46,18 @@ class LocationRepository(
                 // 端末時計がずれていても順序が壊れないよう、測位時刻そのものを使う。
                 recordedAt = if (location.time > 0) location.time else now,
                 batteryLevel = batteryLevel(),
-                // 出どころの判断材料 (Issue #13)。判定そのものは送信時に行う。
-                provider = location.provider,
-                hasAltitude = location.hasAltitude(),
-                hasSpeed = location.hasSpeed(),
-                hasBearing = location.hasBearing(),
+                // 出どころの判断材料 (Issue #13, #16)。判定そのものは送信時に行う。
+                provider = evidence.provider,
+                hasAltitude = evidence.hasAltitude,
+                hasSpeed = evidence.hasSpeed,
+                hasBearing = evidence.hasBearing,
+                hasVerticalAccuracy = evidence.hasVerticalAccuracy,
+                hasSpeedAccuracy = evidence.hasSpeedAccuracy,
+                hasBearingAccuracy = evidence.hasBearingAccuracy,
+                hasMslAltitude = evidence.hasMslAltitude,
+                ageMillis = evidence.ageMillis,
+                extraKeys = evidence.extraKeys,
+                satellites = evidence.satellites,
             )
         )
         dao.trimTo(LocationTuning.MAX_QUEUE_SIZE)
